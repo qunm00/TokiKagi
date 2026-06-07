@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 
-  let name = $state("");
-  let greetMsg = $state("");
+let name = $state("");
+// biome-ignore lint/correctness/noUnusedVariables: assigned in event handler below
+let greetMsg = $state("");
 
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
-  }
+// biome-ignore lint/correctness/noUnusedVariables: used as onsubmit handler in template
+async function greet(event: Event) {
+  event.preventDefault();
+  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+  greetMsg = await invoke("greet", { name });
+}
 </script>
 
 <main class="container">

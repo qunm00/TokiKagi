@@ -1,0 +1,46 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
+  "files": {
+    "includes": [
+      "**/*.svelte",
+      "**/*.ts",
+      "**/*.js",
+      "**/*.json",
+      "**/*.css",
+      "!**/node_modules",
+      "!**/build",
+      "!**/.svelte-kit",
+      "!**/package",
+      "!**/src-tauri/target",
+      "!**/src-tauri/gen"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "bracketSpacing": true
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
+}
