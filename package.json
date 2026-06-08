@@ -1,7 +1,7 @@
 {
   "name": "tokikagi",
   "version": "0.1.0",
-  "description": "",
+  "description": "A TOTP desktop authenticator built with Tauri and SvelteKit.",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -21,7 +21,7 @@
     "cargo:test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "cargo:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-opener": "^2.5.4",
