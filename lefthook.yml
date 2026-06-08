@@ -30,3 +30,17 @@ pre-commit:
     cargo-test:
       glob: "src-tauri/**/*.rs"
       run: pnpm cargo:test
+
+# pre-push: runs before `git push`
+# pre-push:
+#   parallel: false
+#   commands:
+#     # 1. Protect main branch from direct pushes
+#     protect-main:
+#       run: |
+#         BRANCH=$(git rev-parse --abbrev-ref HEAD)
+#         if [ "$BRANCH" = "main" ]; then
+#           echo "❌ Cannot push directly to main"
+#           echo "   Create a pull request instead"
+#           exit 1
+#         fi
