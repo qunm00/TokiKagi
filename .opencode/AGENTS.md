@@ -1,27 +1,38 @@
-# TokiKagi — Tauri + SvelteKit + TypeScript + Rust
+# TokiKagi — TOTP Desktop Authenticator
 
-Tauri desktop app (SPA frontend with Rust backend). Frontend dev with pnpm, Rust tests with cargo.
+Tauri + SvelteKit + TypeScript + Rust. Stores 2FA secrets locally, generates TOTP codes. No cloud, no server.
 
 ## Structure
 
-- `src/` — SvelteKit frontend (TypeScript, Svelte 5)
-- `src-tauri/` — Tauri Rust backend (main.rs, lib.rs)
+- `src/` — SvelteKit frontend (TypeScript, Svelte 5, Melt UI components)
+- `src-tauri/` — Tauri Rust backend (main.rs, lib.rs), secrets stored as JSON in app data dir
 - `build/` — SvelteKit static output (adapter-static, SPA mode)
 
 ## Core commands
 
-**Frontend:** `pnpm dev` | `pnpm build` | `pnpm test` | `pnpm test:watch` | `pnpm check`  
-**Rust:** `pnpm cargo:check` | `pnpm cargo:test` | `pnpm cargo:clippy`  
-**Quality:** `pnpm lint` | `pnpm lint:fix` | `pnpm format`
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Tauri dev server (frontend on http://localhost:1420) |
+| `pnpm build` | Build SvelteKit to `build/` |
+| `pnpm test` | Vitest (frontend, jsdom) |
+| `pnpm cargo:test` | Rust tests |
+| `pnpm lint:fix` | Biome lint + auto-fix |
+| `pnpm check` | SvelteKit type check |
+| `pnpm cargo:clippy` | Rust lint (denies warnings) |
+
+## Lefthook (enforced on commit)
+
+Pre-commit (sequential): `lint:fix` → `typecheck` → `test` → `cargo:clippy` → `cargo:test`  
+Pre-push: blocks direct pushes to `main` + re-runs tests. Use PRs for all changes to `main`.
 
 ## Key quirks
 
-- **SPA mode:** Tauri requires static frontend; `svelte.config.js` uses `adapter-static` with fallback to index.html (no SSR).
-- **Dev flow:** `pnpm dev` runs SvelteKit on http://localhost:1420; Tauri loads it via `beforeDevCommand` in `tauri.conf.json`.
-- **Build artifacts:** SvelteKit outputs to `build/` (not `dist/`); Tauri expects frontend at `build/`.
-- **Before commits:** `pnpm lint:fix` → `pnpm check` → `pnpm test` → `pnpm cargo:clippy`
-- **Testing:** Vitest (jsdom), setup file at `src/test-setup.ts`, test patterns: `**/*.{test,spec}.{js,ts}`
-- **Biome config:** Line width 100, double quotes, semicolons, trailing commas. Ignores: `node_modules`, `build`, `.svelte-kit`, `src-tauri/{target,gen}`
+- **SPA mode:** `adapter-static` with fallback to index.html (no SSR).
+- **Dev port:** http://localhost:1420 hardcoded in `tauri.conf.json`.
+- **Build output:** `build/` (not `dist/`).
+- **Testing:** Vitest + jsdom, setup: `src/test-setup.ts`, patterns: `**/*.{test,spec}.{js,ts}`.
+- **Biome:** Line width 100, double quotes, semicolons, trailing commas. Ignores `node_modules`, `build`, `.svelte-kit`, `src-tauri/{target,gen}`.
+- **License:** GPL-3.0-only (package.json, Cargo.toml, LICENSE file).
 
 ---
 
