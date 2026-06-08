@@ -19,7 +19,7 @@ Store and manage your 2FA secrets locally, generate time-based one-time password
 pnpm install
 
 # Development (Tauri + SvelteKit)
-pnpm dev
+pnpm run tauri dev
 ```
 
 The app opens in a native window. Frontend dev server runs on http://localhost:1420.
