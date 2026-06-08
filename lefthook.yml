@@ -1,0 +1,32 @@
+# Global settings (optional, can override per-hook)
+# Configure which commands should stop on failure
+
+# pre-commit hook: runs before `git commit`
+pre-commit:
+  parallel: false  # Run commands sequentially to preserve order
+  commands:
+    # 1. Format and lint frontend code
+    lint-fix:
+      glob: "src/**/*.{ts,js,svelte,json,css}"
+      run: pnpm lint:fix
+      stage_fixed: false  # Stage fixed files
+    
+    # 2. Type check (SvelteKit)
+    typecheck:
+      glob: "src/**/*.{ts,svelte}"
+      run: pnpm check
+    
+    # 3. Frontend tests
+    test:
+      glob: "src/**/*.{ts,js,svelte}"
+      run: pnpm test
+    
+    # 4. Rust linting (if Rust files changed)
+    cargo-clippy:
+      glob: "src-tauri/**/*.rs"
+      run: pnpm cargo:clippy
+    
+    # 5. Rust tests (if Rust files changed)
+    cargo-test:
+      glob: "src-tauri/**/*.rs"
+      run: pnpm cargo:test
