@@ -34,6 +34,10 @@ Pre-push: blocks direct pushes to `main` + re-runs tests. Use PRs for all change
 - **Biome:** Line width 100, double quotes, semicolons, trailing commas. Ignores `node_modules`, `build`, `.svelte-kit`, `src-tauri/{target,gen}`.
 - **License:** GPL-3.0-only (package.json, Cargo.toml, LICENSE file).
 
+## Domain gaps
+
+User is experienced but may lack background in specific CS areas (crypto, systems, low-level ops, etc.). When introducing a concept: state what problem it solves, how it fits in the stack, and a short analogy. Don't assume prior knowledge of niche domains.
+
 ---
 
 # context-mode — MANDATORY routing rules
