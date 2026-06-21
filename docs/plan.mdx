@@ -1,0 +1,608 @@
+---
+title: TokiKagi UI Plan
+description: Implementation plan for the TokiKagi TOTP desktop authenticator frontend
+status: draft
+created: 2026-06-21
+---
+
+<Steps>
+  <Step title="Stack">
+    - **Frontend:** Tauri v2 + SvelteKit v2 (SPA) + Svelte 5 (runes)
+    - **UI Library:** Melt UI v0.44 (headless, builders + components)
+    - **Styling:** Plain scoped CSS + CSS custom properties (no framework)
+    - **Storage:** SQLite via `rusqlite` (Rust backend), file in Tauri `app_data_dir`
+    - **DB integration:** Custom Tauri commands (not plugin-sql)
+    - **Encryption:** AES-256-GCM with key derived from master password via Argon2id
+  </Step>
+</Steps>
+
+---
+
+## 1. Data Model (SQLite)
+
+```sql title="tokikagi.db schema"
+CREATE TABLE vault (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    salt       TEXT NOT NULL,             -- Argon2id salt, Base64-encoded
+    verifier   TEXT NOT NULL,             -- AES-GCM encrypted known-plaintext, Base64
+    updated_at TEXT NOT NULL              -- ISO 8601
+);
+
+CREATE TABLE accounts (
+    id         TEXT PRIMARY KEY,          -- UUID v4
+    label      TEXT NOT NULL,             -- plaintext, e.g. "GitHub"
+    secret     TEXT NOT NULL,             -- AES-256-GCM encrypted, Base64-encoded
+    algorithm  TEXT NOT NULL DEFAULT 'SHA1',
+    digits     INTEGER NOT NULL DEFAULT 6,
+    period     INTEGER NOT NULL DEFAULT 30,
+    created_at TEXT NOT NULL,             -- ISO 8601
+    updated_at TEXT NOT NULL              -- ISO 8601
+);
+
+CREATE TABLE config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+```
+
+- `vault` contains exactly 1 row after initialization (enforced by `CHECK (id = 1)`).
+- `accounts.secret` is encrypted per-row with a unique random nonce prepended to the ciphertext (both Base64-encoded together).
+- `config` stores settings like `auto_lock_minutes`.
+
+---
+
+## 2. Encryption Architecture
+
+### Key derivation
+
+```
+master_password + vault.salt → Argon2id → 256-bit key
+```
+
+Key held in Rust memory only — never persisted.
+
+### Encryption per account
+
+```
+AES-256-GCM(key, random_nonce, plaintext_secret) → ciphertext + auth_tag
+```
+
+Stored as `base64(nonce ‖ ciphertext ‖ auth_tag)`.
+
+### Vault verification
+
+On `create_vault`: encrypt the string `"TOKIKAGI_VAULT_OK"` with a random nonce → store as `vault.verifier`.
+
+On `unlock`: derive key, try to decrypt `vault.verifier` → if GCM auth tag passes, password is correct.
+
+### OS Keychain (biometric unlock)
+
+The master password is optionally saved to the OS-native keychain:
+- **macOS:** Keychain → Touch ID prompt on access
+- **Windows:** Credential Manager → Windows Hello prompt on access
+- **Linux:** Secret Service (libsecret) → system policy
+
+Flow:
+1. After first successful `unlock`, offer: "Save to keychain for fingerprint unlock?"
+2. If accepted, `save_to_keychain(password)` stores the master password
+3. On next launch, `has_keychain_entry()` returns `true` → UnlockScreen shows a biometric button prominently
+4. User clicks biometric button → `unlock_from_keychain()` reads keychain → OS shows biometric prompt → password retrieved → `unlock()` called internally
+5. If biometric fails (cancelled, no enrollment, etc.) → fall back to manual password entry
+
+---
+
+## 3. Backend (Rust/Tauri)
+
+### New dependencies
+
+| Package | Version | Feature |
+|---|---|---|
+| `rusqlite` | 0.31 | `bundled` |
+| `uuid` | 1 | `v4` |
+| `chrono` | 0.4 | — |
+| `argon2` | 0.5 | — |
+| `aes-gcm` | 0.10 | `rand_core` |
+| `rand` | 0.8 | — |
+| `keyring` | 3 | `default` |
+
+### State
+
+```rust
+struct AppState {
+    db: Mutex<Connection>,
+    cipher: Mutex<Option<CipherState>>,   // None = locked
+}
+
+struct CipherState {
+    key: [u8; 32],
+}
+```
+
+### Commands
+
+| Command | Signature | Description |
+|---|---|---|
+| `is_initialized` | `() -> bool` | Vault row exists? |
+| `create_vault` | `(password: String) -> Result<(), String>` | First-time setup |
+| `unlock` | `(password: String) -> Result<bool, String>` | Verify + derive key |
+| `lock` | `() -> ()` | Wipe key from memory, clear `CipherState` |
+| `get_accounts` | `() -> Result<Vec<Account>, String>` | Load + decrypt all accounts |
+| `add_account` | `(label: String, secret: String) -> Result<Account, String>` | Encrypt + insert + return |
+| `delete_account` | `(id: String) -> Result<(), String>` | Remove account |
+| `get_config` | `(key: String) -> Result<Option<String>, String>` | Get a config value |
+| `set_config` | `(key: String, value: String) -> Result<(), String>` | Set a config value |
+| `has_keychain_entry` | `() -> bool` | Check if master password is saved in OS keychain |
+| `unlock_from_keychain` | `() -> Result<bool, String>` | Read password from keychain → attempt unlock. OS handles biometric prompt. |
+| `save_to_keychain` | `(password: String) -> Result<(), String>` | Store master password in OS keychain |
+| `remove_from_keychain` | `() -> Result<(), String>` | Delete keychain entry (user opts out) |
+
+### Existing commands (unchanged)
+
+- `generate_totp(secret: String) -> Result<String, String>`
+- `get_time_remaining() -> u64`
+
+### Auto-lock
+
+A Rust `thread::spawn` runs a tick loop. On each tick, if elapsed time since last activity > configured timeout, call `lock()`.
+
+"Activity" = any command that uses `cipher` (`get_accounts`, `add_account`, etc.). A simple `last_activity: Mutex<Instant>` timestamp is bumped on each such command.
+
+Configurable via `config` table key `auto_lock_minutes` (default: 5).
+
+---
+
+## 4. Frontend File Structure
+
+```
+src/
+├── app.css                           # Global styles, design tokens
+├── routes/
+│   ├── +layout.svelte                # App shell (imports app.css)
+│   ├── +layout.ts                    # ssr = false (existing, unchanged)
+│   └── +page.svelte                  # Main orchestrator (rewrite)
+└── lib/
+    ├── types.ts                      # Account, etc. interfaces
+    ├── stores/
+    │   ├── vault.svelte.ts           # Lock/unlock state
+    │   └── accounts.svelte.ts        # Reactive accounts store (Svelte 5 runes)
+    ├── actions/
+    │   ├── vault.ts                  # invoke() wrappers for vault commands
+    │   └── accounts.ts               # invoke() wrappers for account commands
+    └── components/
+        ├── Header.svelte             # App title + "Add" button
+        ├── SearchBar.svelte          # Filter accounts by label
+        ├── AccountCard.svelte        # Single account card (focusable, Ctrl+C)
+        ├── AccountGrid.svelte        # Responsive grid wrapper
+        ├── CountdownBar.svelte       # Progress bar (Melt Progress)
+        ├── EmptyState.svelte         # "No accounts" / "No results" state
+        ├── AddAccountDialog.svelte   # Melt Dialog for adding accounts
+        ├── SetPasswordScreen.svelte  # First-launch master password setup
+        ├── UnlockScreen.svelte       # Password entry + biometric unlock button
+        └── KeychainPrompt.svelte     # "Save to keychain?" toggle after unlock
+```
+
+---
+
+## 5. Screen Flow
+
+```
+App launch
+  ├─ vault.exists? ──No──→ SetPasswordScreen
+  │                            │
+  │                        create_vault(password)
+  │                            │
+  │                        offer "Save to keychain?"
+  │                            │
+  │                         ← success →
+  │
+  └─ vault.exists? ──Yes──→ UnlockScreen
+                               │
+                          ┌── has_keychain_entry?
+                          │       │
+                          │   ┌── Yes → show biometric button
+                          │   │          │
+                          │   │     [User clicks biometric]
+                          │   │          │
+                          │   │     unlock_from_keychain()
+                          │   │          │
+                          │   │     OS prompts biometric (Touch ID / Hello)
+                          │   │          │
+                          │   │    ┌── success → auto-unlock ✓
+                          │   │    └── fail/decline → fall back to password
+                          │   │
+                          │   └── No → show password field only
+                          │
+                          ├── unlock(password) // manual
+                          │       │
+                          │   ┌── wrong? → error
+                          │   │
+                          │   └── correct → offer save to keychain (if !has_keychain_entry)
+                          │                     │
+                          │                     └── accept → save_to_keychain()
+                          │
+                          └──→ +page.svelte
+                                   │
+                              [Timer / auto-lock]
+                                   │
+                              lock() → UnlockScreen (re-loop)
+```
+
+
+---
+
+## 6. Component Tree (Unlocked State)
+
+```
++layout.svelte
+  └─ <link to app.css>
+  └─ <slot/> (renders current screen)
+
++page.svelte                      ← orchestrator: accounts + timers
+  ├─ <Header />                   ← "TokiKagi" + account count + lock button
+  ├─ <SearchBar bind:query />     ← filter input
+  ├─ {#if filtered.length > 0}
+  │    <AccountGrid>
+  │      {#each filtered as account}
+  │        <AccountCard {account} on:copy>
+  │          ├─ label/issuer
+  │          ├─ 6-digit code (monospace, ~2rem)
+  │          ├─ <CountdownBar remaining={} total={30} />
+  │          └─ delete button (visible on hover)
+  │        </AccountCard>
+  │      {/each}
+  │    </AccountGrid>
+  │  {:else}
+  │    <EmptyState />             ← "No accounts" or "No results" (contextual)
+  │  {/if}
+  └─ <AddAccountDialog />         ← Melt Dialog builder
+       ├─ label input
+       ├─ secret key input
+       └─ Submit / Cancel
+```
+
+---
+
+## 7. Data Flow & Timing Strategy
+
+<Steps>
+  <Step title="Locked state">
+    ```mermaid
+    sequenceDiagram
+        participant App as +page.svelte
+        participant Rust as Tauri Backend
+        participant DB as SQLite
+
+        App->>Rust: is_initialized()
+        Rust->>DB: SELECT COUNT(*) FROM vault
+        DB-->>Rust: 0 or 1
+        Rust-->>App: bool
+
+        alt No vault → SetPasswordScreen
+            App->>Rust: create_vault(password)
+            Rust->>Rust: derive key (Argon2id)
+            Rust->>DB: INSERT INTO vault (salt, verifier)
+            DB-->>Rust: ok
+            Rust-->>App: ok
+        else Vault exists → UnlockScreen
+            App->>Rust: unlock(password)
+            Rust->>DB: SELECT salt, verifier
+            DB-->>Rust: (salt, verifier)
+            Rust->>Rust: derive key, decrypt verifier
+            Rust-->>App: true / false
+        end
+    ```
+  </Step>
+  <Step title="Unlocked (account data flow)">
+    ```mermaid
+    sequenceDiagram
+        participant Page as +page.svelte
+        participant Rust as Tauri Backend
+        participant DB as SQLite
+
+        Page->>Rust: get_accounts()
+        Rust->>DB: SELECT * FROM accounts
+        DB-->>Rust: encrypted rows
+        Rust->>Rust: decrypt each secret (AES-GCM)
+        Rust-->>Page: Vec<Account>
+
+        Page->>Rust: get_time_remaining()
+        Rust-->>Page: u64
+
+        Par On "Add Account"
+            Page->>Rust: add_account(label, secret)
+            Rust->>Rust: encrypt secret (AES-GCM)
+            Rust->>DB: INSERT
+            DB-->>Rust: ok
+            Rust-->>Page: Account
+        end
+
+        Par On "Delete"
+            Page->>Rust: delete_account(id)
+            Rust->>DB: DELETE
+            DB-->>Rust: ok
+            Rust-->>Page: ()
+        end
+    ```
+  </Step>
+  <Step title="Auto-lock timeout">
+    ```mermaid
+    sequenceDiagram
+        participant App as App
+        participant Rust as Tauri Backend
+        participant Timer as Rust Timer Thread
+
+        Note over App,Rust: Last activity = now()
+
+        loop Every 10s
+            Timer->>Timer: elapsed > auto_lock_minutes?
+            alt Timeout exceeded
+                Timer->>Rust: lock()
+                Rust->>Rust: wipe CipherState
+                Rust-->>App: app must re-show UnlockScreen
+            end
+        end
+    ```
+  </Step>
+  <Step title="TOTP code refresh (after unlock)">
+    **Minimize IPC calls** — only call into Rust when necessary.
+
+    - **On mount:** `get_accounts()` + `get_time_remaining()`
+    - **Every 30s** (when countdown hits 0): `generate_totp()` for each account
+    - **Every 1s** (local `setInterval`): decrement counter, update `CountdownBar`
+    - **Copy to clipboard:** `navigator.clipboard.writeText()` — no IPC
+  </Step>
+</Steps>
+
+---
+
+## 8. Search & Keyboard Copy
+
+### Search bar
+
+- `<SearchBar />` renders above the account grid
+- Filtering is frontend-only: `$derived(accounts.filter(a => a.label.toLowerCase().includes(query.toLowerCase())))`
+- Results stored as `filtered` in the accounts store
+
+### Auto-copy on single search result
+
+When `filtered.length === 1`, that account's TOTP code is **automatically copied** to clipboard. This enables a fast workflow:
+
+> User presses `Cmd+F` → types "Git" → grid narrows to one card → code is already copied → user `Cmd+V`s into the 2FA field
+
+Visual feedback: a brief "Copied {label}" toast or inline flash on the card.
+
+### Ctrl+C on focused card
+
+- Each `<AccountCard>` is focusable (`tabindex="0"`)
+- `onkeydown`: if `e.ctrlKey && e.key === 'c'` → `navigator.clipboard.writeText(code)`
+- A subtle focus ring indicates the selected card
+
+### Summary
+
+| Interaction | Behavior |
+|---|---|
+| Type in search | Filters account grid in real-time |
+| Search narrows to 1 result | Auto-copies that code to clipboard |
+| Click a code | Copies that code (existing behavior) |
+| Focus card + Ctrl+C | Copies focused card's code |
+
+---
+
+## 9. Melt UI Usage
+
+| Component | Melt API | Import | Purpose |
+|---|---|---|---|
+| AddAccountDialog | `Dialog` builder | `melt/builders` | Modal overlay for adding accounts |
+| CountdownBar | `Progress` component | `melt/components` | Visual countdown indicator |
+| UnlockScreen (pw field) | `PinInput` builder (optional) | `melt/builders` | Masked password input |
+
+---
+
+## 10. Design System (`app.css`)
+
+```css title="src/app.css"
+:root {
+  --color-bg: #f6f6f6;
+  --color-bg-card: #ffffff;
+  --color-text: #0f0f0f;
+  --color-text-secondary: #6b6b6b;
+  --color-accent: #396cd8;
+  --color-accent-hover: #2d5abf;
+  --color-danger: #e74c3c;
+  --color-success: #27ae60;
+  --color-border: #e0e0e0;
+
+  --font-sans: Inter, Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
+
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+```
+
+Dark mode via `@media (prefers-color-scheme: dark)` — toggle `--color-*` tokens.
+
+---
+
+## 11. AccountCard Mock
+
+```text
+┌──────────────────────────────┐
+│  GitHub                  ✕   │  ← label + delete on hover
+│                              │
+│        482 391               │  ← 6-digit code, monospace, large
+│                              │
+│  ████████░░░░░░░░░░░░  22s   │  ← CountdownBar + remaining text
+└──────────────────────────────┘
+```
+
+---
+
+## 12. Milestones (Feature-Based)
+
+Each milestone delivers a complete, demoable end-to-end feature. All Rust + frontend work for that feature is done together.
+
+<Steps>
+  <Step title="M1 — Vault: lock/unlock flow">
+    **Done when:** User can open the app, create a master password, unlock with password or
+    fingerprint, and the app auto-locks after inactivity.
+
+    **Rust:**
+    - Add deps: `rusqlite`, `uuid`, `chrono`, `argon2`, `aes-gcm`, `rand`, `keyring`
+    - `AppState` with `db` + `cipher` + `last_activity`
+    - Commands: `is_initialized`, `create_vault`, `unlock`, `lock`
+    - Commands: `has_keychain_entry`, `save_to_keychain`, `remove_from_keychain`, `unlock_from_keychain`
+    - Commands: `get_config`, `set_config`
+    - Auto-lock timer thread (configurable timeout via `config` table)
+    - DB init with `vault` + `config` tables
+
+    **Frontend:**
+    - `app.css` with design tokens
+    - `+layout.svelte` shell
+    - `lib/types.ts`
+    - `lib/stores/vault.svelte.ts` (lock/unlock reactive state)
+    - `lib/actions/vault.ts` (invoke wrappers)
+    - `SetPasswordScreen.svelte` — first-launch password creation
+    - `UnlockScreen.svelte` — password entry + biometric button
+    - `KeychainPrompt.svelte` — "Save to keychain?" toggle
+    - `+page.svelte` wired for vault flow only (shows placeholder after unlock)
+  </Step>
+
+  <Step title="M2 — Accounts: view and manage">
+    **Done when:** User can add accounts, see live TOTP codes with countdown timers,
+    copy codes by clicking, and delete accounts.
+
+    **Rust:**
+    - `add_account` (encrypt secret before insert)
+    - `get_accounts` (decrypt secrets on read)
+    - `delete_account`
+    - Bump `last_activity` on each command
+    - DB init adds `accounts` table (can add to existing migration)
+
+    **Frontend:**
+    - `lib/stores/accounts.svelte.ts` (reactive account list)
+    - `lib/actions/accounts.ts` (invoke wrappers)
+    - `Header.svelte` — app title, account count, lock button
+    - `AccountCard.svelte` — label, 6-digit code, countdown, copy on click
+    - `AccountGrid.svelte` — responsive CSS grid of cards
+    - `CountdownBar.svelte` — Melt Progress for seconds-remaining visualization
+    - `EmptyState.svelte` — "No accounts yet" prompt
+    - `AddAccountDialog.svelte` — Melt Dialog with label + secret inputs
+    - `+page.svelte` wired for vault flow + account management + TOTP timers
+  </Step>
+
+  <Step title="M3 — Search & keyboard copy">
+    **Done when:** User can filter accounts by typing, auto-copy when narrowed to
+    one result, and use Ctrl+C on a focused card.
+
+    **Rust:** None.
+
+    **Frontend:**
+    - `SearchBar.svelte` — input with clear button
+    - `$derived` filter in accounts store (`filtered` list)
+    - Auto-copy to clipboard when `filtered.length === 1`
+    - `AccountCard` focusable (`tabindex="0"`) with `Ctrl+C` handler
+    - Focus ring style for keyboard navigation
+    - "Copied {label}" flash feedback on auto-copy
+    - `EmptyState` updated to show "No results" vs "No accounts"
+  </Step>
+
+  <Step title="M4 — Polish">
+    **Done when:** The app feels polished with smooth transitions, proper dark mode,
+    and graceful error handling for all edge cases.
+
+    **Rust:** None.
+
+    **Frontend:**
+    - Transitions between locked/unlocked screens
+    - Transition when accounts are added/removed
+    - Dark mode fine-tuning (test all components)
+    - Error states: wrong password, invalid secret, keychain errors, DB errors
+    - Edge cases: keychain entry but vault deleted, biometric unavailable,
+      rapid add/delete, empty search with no accounts
+    - Loading states during invoke calls
+    - Window sizing and minimum dimensions
+  </Step>
+</Steps>
+
+---
+
+## Appendix: Key Code References
+
+### AccountCard snippet
+
+```svelte title="src/lib/components/AccountCard.svelte (conceptual)"
+<script lang="ts">
+  import type { Account } from '$lib/types'
+  import CountdownBar from './CountdownBar.svelte'
+  import { invoke } from '@tauri-apps/api/core'
+
+  let { account }: { account: Account } = $props()
+  let code = $state('')
+  let remaining = $state(30)
+  let copied = $state(false)
+
+  async function copy() {
+    await navigator.clipboard.writeText(code)
+    copied = true
+    setTimeout(() => (copied = false), 1500)
+  }
+</script>
+
+<button class="card" onclick={copy}>
+  <div class="card-header">
+    <span class="label">{account.label}</span>
+    <button class="delete" onclick={(e) => { e.stopPropagation(); /* delete */ }}>
+      ✕
+    </button>
+  </div>
+  <div class="code">{code}</div>
+  <CountdownBar {remaining} total={30} />
+</button>
+```
+
+### Encryption core (Rust conceptual)
+
+```rust title="src-tauri/src/crypto.rs (conceptual)"
+use argon2::Argon2;
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+use rand::RngCore;
+
+fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
+    let mut key = [0u8; 32];
+    Argon2::default()
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .expect("Argon2 should not fail with valid params");
+    key
+}
+
+fn encrypt(key: &[u8; 32], plaintext: &str) -> String {
+    let cipher = Aes256Gcm::new_from_slice(key).unwrap();
+    let mut nonce = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce);
+    let ciphertext = cipher.encrypt(&Nonce::from_slice(&nonce), plaintext.as_bytes())
+        .expect("encryption should not fail");
+    // Encode nonce + ciphertext as single Base64 string
+    let mut combined = nonce.to_vec();
+    combined.extend_from_slice(&ciphertext);
+    base64::encode(&combined)
+}
+
+fn decrypt(key: &[u8; 32], encoded: &str) -> Result<String, String> {
+    let combined = base64::decode(encoded).map_err(|_| "invalid base64")?;
+    let (nonce, ciphertext) = combined.split_at(12);
+    let cipher = Aes256Gcm::new_from_slice(key).unwrap();
+    let plaintext = cipher.decrypt(&Nonce::from_slice(nonce), ciphertext)
+        .map_err(|_| "decryption failed")?;
+    String::from_utf8(plaintext).map_err(|_| "invalid utf8")
+}
+```
