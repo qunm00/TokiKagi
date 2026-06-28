@@ -9,3 +9,8 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .opencode/context-mode
+
+# Coverage output
+/coverage/
+src-tauri/lcov.info
+.pnpm-store/

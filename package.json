@@ -19,7 +19,9 @@
     "test:ui": "vitest --ui",
     "cargo:check": "cargo check --manifest-path src-tauri/Cargo.toml",
     "cargo:test": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "cargo:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
+    "cargo:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "coverage": "vitest run --coverage",
+    "cargo:coverage": "cargo llvm-cov --manifest-path src-tauri/Cargo.toml --all-features --workspace --lcov --output-path src-tauri/lcov.info"
   },
   "license": "GPL-3.0-only",
   "dependencies": {
@@ -41,6 +43,7 @@
     "svelte-check": "^4.6.0",
     "typescript": "~5.6.3",
     "vite": "^6.4.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.9"
   }
 }
