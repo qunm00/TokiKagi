@@ -137,3 +137,14 @@ PR 0 is infrastructure — it runs in CI for every PR.
 PRs 1–3 are Rust-only and can be reviewed sequentially.
 PR 4 (frontend foundation) is independent of PRs 1–3 and can be done in parallel.
 PR 5 depends on both PR 3 (for keychain invoke wrappers) and PR 4 (for the store/actions).
+
+---
+
+## Cross-cutting: Compiler warnings as CI errors
+
+CI uses `cargo clippy -- -D clippy::all`, which denies clippy-specific lints
+but allows compiler warnings (e.g. `dead_code`) to pass.
+
+After PR 2 wires `crypto.rs` functions into vault commands, the `dead_code`
+warnings resolve naturally. At that point CI should be switched to
+`-D warnings` to block all compiler warnings from entering the codebase.
