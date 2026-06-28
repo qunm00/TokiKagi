@@ -26,4 +26,12 @@ serde_json = "1"
 hmac = "0.12"
 sha1 = "0.10"
 base32 = "0.5"
+rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite_migration = { version = "2.6", features = ["from-directory"] }
+include_dir = "0.7"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+argon2 = "0.5"
+aes-gcm = "0.10"
+rand = "0.8"
 

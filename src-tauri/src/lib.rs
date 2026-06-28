@@ -1,10 +1,21 @@
+mod crypto;
+mod db;
+
 use hmac::{Hmac, Mac};
+use rusqlite::Connection;
 use sha1::Sha1;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::Manager;
 
 type HmacSha1 = Hmac<Sha1>;
 
 const TOTP_STEP: u64 = 30;
+
+/// Shared application state managed by Tauri.
+pub struct AppState {
+    pub db: Mutex<Connection>,
+}
 
 fn hotp(secret: &[u8], counter: u64) -> u32 {
     let counter_bytes = counter.to_be_bytes();
@@ -45,11 +56,32 @@ fn get_time_remaining() -> u64 {
     TOTP_STEP - (now % TOTP_STEP)
 }
 
+#[tauri::command]
+fn is_initialized(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let conn = state.db.lock().map_err(|e| format!("lock error: {e}"))?;
+    db::is_initialized(&conn)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![generate_totp, get_time_remaining])
+        .setup(|app| {
+            let db_dir = app.path().app_data_dir().expect("failed to resolve app data dir");
+            std::fs::create_dir_all(&db_dir).expect("failed to create app data dir");
+            let db_path = db_dir.join("tokikagi.db");
+            let conn =
+                db::open(db_path.to_str().expect("invalid db path")).expect("failed to open database");
+            app.manage(AppState {
+                db: Mutex::new(conn),
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            generate_totp,
+            get_time_remaining,
+            is_initialized
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
