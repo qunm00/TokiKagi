@@ -30,11 +30,57 @@ pub fn open_in_memory() -> Result<Connection, String> {
     Ok(conn)
 }
 
-/// Returns `true` if the vault has been initialized (has a row).
+/// Returns the vault row: (salt, verifier, updated_at).
+pub fn get_vault(conn: &Connection) -> Result<(Vec<u8>, Vec<u8>, String), String> {
+    let (salt_hex, verifier_hex, updated_at): (String, String, String) = conn
+        .query_row("SELECT salt, verifier, updated_at FROM vault WHERE id = 1", [], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .map_err(|e| format!("failed to read vault: {e}"))?;
+    let salt = hex::decode(&salt_hex).map_err(|e| format!("invalid salt hex: {e}"))?;
+    let verifier = hex::decode(&verifier_hex).map_err(|e| format!("invalid verifier hex: {e}"))?;
+    Ok((salt, verifier, updated_at))
+}
+
+/// Inserts (or replaces) the single vault row.
+pub fn set_vault(conn: &Connection, salt: &[u8], verifier: &[u8], updated_at: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR REPLACE INTO vault (id, salt, verifier, updated_at) VALUES (1, ?1, ?2, ?3)",
+        rusqlite::params![hex::encode(salt), hex::encode(verifier), updated_at],
+    )
+    .map_err(|e| format!("failed to insert vault: {e}"))?;
+    Ok(())
+}
+
+/// Reads a config value.
+pub fn get_config(conn: &Connection, key: &str) -> Result<Option<String>, String> {
+    let result: Result<String, rusqlite::Error> = conn.query_row(
+        "SELECT value FROM config WHERE key = ?1",
+        rusqlite::params![key],
+        |row| row.get(0),
+    );
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(format!("failed to read config: {e}")),
+    }
+}
+
+/// Writes a config value.
+pub fn set_config(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+        rusqlite::params![key, value],
+    )
+    .map_err(|e| format!("failed to write config: {e}"))?;
+    Ok(())
+}
+
+/// Returns `true` if vault have been created (has a row).
 pub fn is_initialized(conn: &Connection) -> Result<bool, String> {
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM vault", [], |row| row.get(0))
-        .map_err(|e| format!("failed to check vault initialization: {e}"))?;
+        .map_err(|e| format!("failed to check initialization: {e}"))?;
     Ok(count > 0)
 }
 
@@ -74,7 +120,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_initialized_returns_false_for_empty_vault() {
+    fn test_is_initialized_returns_false_empty_vault() {
         let conn = open_in_memory().unwrap();
         assert!(!is_initialized(&conn).unwrap());
     }
@@ -93,7 +139,6 @@ mod tests {
     #[test]
     fn test_vault_check_constraint_enforces_id_equals_one() {
         let conn = open_in_memory().unwrap();
-        // id=2 violates CHECK(id=1)
         let err = conn.execute(
             "INSERT INTO vault (id, salt, verifier, updated_at) VALUES (2, 'salt', 'verifier', '2024-01-01T00:00:00Z')",
             [],
@@ -109,11 +154,93 @@ mod tests {
             [],
         )
         .unwrap();
-        // Duplicate id=1 violates PRIMARY KEY
         let err = conn.execute(
             "INSERT INTO vault (id, salt, verifier, updated_at) VALUES (1, 'salt2', 'verifier2', '2024-01-01T00:00:00Z')",
             [],
         );
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_insert_and_get_vault_roundtrip() {
+        let conn = open_in_memory().unwrap();
+        let salt = b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
+        let verifier = b"\xbe\xef\xca\xfe";
+        let updated_at = "2025-06-28T12:00:00+00:00";
+
+        set_vault(&conn, salt, verifier, updated_at).unwrap();
+        let (got_salt, got_verifier, got_updated) = get_vault(&conn).unwrap();
+
+        assert_eq!(got_salt, salt);
+        assert_eq!(got_verifier, verifier);
+        assert_eq!(got_updated, updated_at);
+    }
+
+    #[test]
+    fn test_set_vault_replaces_existing_row() {
+        let conn = open_in_memory().unwrap();
+        let salt1 = b"aaaaaaaaaaaaaaaa";
+        let salt2 = b"bbbbbbbbbbbbbbbb";
+
+        set_vault(&conn, salt1, b"v1", "2024-01-01T00:00:00Z").unwrap();
+        set_vault(&conn, salt2, b"v2", "2025-01-01T00:00:00Z").unwrap();
+
+        let (got_salt, got_verifier, _) = get_vault(&conn).unwrap();
+        assert_eq!(got_salt, salt2);
+        assert_eq!(got_verifier, b"v2");
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vault", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_get_vault_errors_on_empty() {
+        let conn = open_in_memory().unwrap();
+        let result = get_vault(&conn);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_config_returns_none_for_missing_key() {
+        let conn = open_in_memory().unwrap();
+        assert_eq!(get_config(&conn, "nonexistent").unwrap(), None);
+    }
+
+    #[test]
+    fn test_set_config_and_get_config_roundtrip() {
+        let conn = open_in_memory().unwrap();
+        set_config(&conn, "theme", "dark").unwrap();
+        assert_eq!(
+            get_config(&conn, "theme").unwrap(),
+            Some("dark".to_string())
+        );
+    }
+
+    #[test]
+    fn test_set_config_upserts_existing_key() {
+        let conn = open_in_memory().unwrap();
+        set_config(&conn, "auto_lock_minutes", "5").unwrap();
+        set_config(&conn, "auto_lock_minutes", "10").unwrap();
+        assert_eq!(
+            get_config(&conn, "auto_lock_minutes").unwrap(),
+            Some("10".to_string())
+        );
+    }
+
+    #[test]
+    fn test_config_multiple_keys_are_independent() {
+        let conn = open_in_memory().unwrap();
+        set_config(&conn, "key_a", "value_a").unwrap();
+        set_config(&conn, "key_b", "value_b").unwrap();
+        assert_eq!(
+            get_config(&conn, "key_a").unwrap(),
+            Some("value_a".to_string())
+        );
+        assert_eq!(
+            get_config(&conn, "key_b").unwrap(),
+            Some("value_b".to_string())
+        );
     }
 }
