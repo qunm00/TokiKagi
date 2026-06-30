@@ -35,4 +35,6 @@ argon2 = "0.5"
 aes-gcm = "0.10"
 rand = "0.8"
 hex = "0.4"
+secrecy = "0.10"
+security-framework = "3"
 

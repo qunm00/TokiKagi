@@ -1,6 +1,7 @@
 use crate::crypto::{decrypt, derive_key, encrypt};
 use crate::db;
 use crate::state::{AppError, AppState, CipherState};
+use secrecy::SecretBox;
 use std::time::{Duration, Instant};
 use std::thread;
 use tauri::Manager;
@@ -21,7 +22,7 @@ pub fn create_vault_inner(state: &AppState, password: &str) -> Result<(), AppErr
     db::set_vault(&conn, &salt, &verifier, &updated_at)?;
     drop(conn);
 
-    *state.cipher()? = Some(CipherState { key });
+    *state.cipher()? = Some(CipherState { key: SecretBox::new(Box::new(key)) });
     *state.last_activity()? = Instant::now();
 
     let conn = state.db()?;
@@ -52,7 +53,7 @@ pub fn unlock_inner(state: &AppState, password: &str) -> Result<(), AppError> {
         return Err(AppError::InvalidPassword);
     }
 
-    *state.cipher()? = Some(CipherState { key });
+    *state.cipher()? = Some(CipherState { key: SecretBox::new(Box::new(key)) });
     *state.last_activity()? = Instant::now();
     Ok(())
 }

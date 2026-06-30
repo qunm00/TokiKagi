@@ -1,10 +1,13 @@
 use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
+use secrecy::SecretBox;
+
 /// In-memory cipher key held while the vault is unlocked.
+/// Zeroed on drop (locks vault, drops CipherState, or app exit).
 pub struct CipherState {
     #[allow(dead_code)]
-    pub key: [u8; 32],
+    pub key: SecretBox<[u8; 32]>,
 }
 
 pub struct AppState {
@@ -46,6 +49,7 @@ pub enum AppError {
     NotInitialized,
     AlreadyInitialized,
     InvalidPassword,
+    Keychain(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -58,6 +62,7 @@ impl std::fmt::Display for AppError {
             AppError::NotInitialized => write!(f, "not initialized"),
             AppError::AlreadyInitialized => write!(f, "already initialized"),
             AppError::InvalidPassword => write!(f, "invalid password"),
+            AppError::Keychain(msg) => write!(f, "{msg}"),
         }
     }
 }
