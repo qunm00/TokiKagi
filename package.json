@@ -10,8 +10,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
-    "lint": "biome check",
-    "lint:fix": "biome check --write",
+    "lint": "eslint . && biome check",
+    "lint:fix": "eslint . --fix && biome check --write",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "test": "vitest run",
@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@eslint/js": "^10.0.1",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.63.0",
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
@@ -38,12 +39,17 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
     "@types/node": "^25.9.2",
+    "@vitest/coverage-v8": "^4.1.9",
+    "eslint": "^10.6.0",
+    "eslint-plugin-svelte": "^3.20.0",
+    "globals": "^17.7.0",
     "jsdom": "^29.1.1",
     "svelte": "^5.56.2",
     "svelte-check": "^4.6.0",
+    "svelte-eslint-parser": "^1.8.0",
     "typescript": "~5.6.3",
+    "typescript-eslint": "^8.62.1",
     "vite": "^6.4.3",
-    "vitest": "^4.1.9",
-    "@vitest/coverage-v8": "^4.1.9"
+    "vitest": "^4.1.9"
   }
 }
