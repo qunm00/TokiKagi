@@ -58,6 +58,14 @@ export async function saveToKeychain(password: string): Promise<void> {
   }
 }
 
+export async function unlockAndSaveToKeychain(password: string): Promise<void> {
+  try {
+    await invoke("unlock_and_save_to_keychain", { password });
+  } catch (err) {
+    throw parseVaultError(err);
+  }
+}
+
 export async function removeFromKeychain(): Promise<void> {
   try {
     await invoke("remove_from_keychain");

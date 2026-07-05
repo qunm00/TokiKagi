@@ -69,6 +69,27 @@ fn save_to_keychain(password: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+fn unlock_and_save_to_keychain(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    password: String,
+) -> Result<(), AppError> {
+    let password = secrecy::SecretString::from(password);
+    vault::unlock_inner(&state, password.expose_secret())?;
+    keychain::save_to_keychain(password.expose_secret())?;
+
+    let auto_lock_minutes: u64 = {
+        let conn = state.db()?;
+        db::get_config(&conn, "auto_lock_minutes")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(vault::DEFAULT_AUTO_LOCK_MINUTES)
+    };
+
+    vault::spawn_auto_lock_watcher(app, Duration::from_secs(auto_lock_minutes * 60));
+    Ok(())
+}
+
+#[tauri::command]
 fn remove_from_keychain() -> Result<(), AppError> {
     keychain::remove_from_keychain()
 }
@@ -121,7 +142,8 @@ pub fn run() {
             has_keychain_entry,
             save_to_keychain,
             remove_from_keychain,
-            unlock_from_keychain
+            unlock_from_keychain,
+            unlock_and_save_to_keychain
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
