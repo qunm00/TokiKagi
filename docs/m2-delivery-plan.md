@@ -154,6 +154,43 @@ PR 4 depends on PR 2 (for accounts store) and PR 3 (for components) — the inte
 
 ---
 
+## Cross-cutting: Error type hygiene
+
+DB-level functions (`db.rs`, `accounts.rs`, `crypto.rs`) use `Result<_, String>` for errors, which
+are converted to `AppError::Db(...)` at the Tauri command layer. This discards all error kind
+information — the frontend can't distinguish "invalid hex" from "decryption failed" from
+"failed to insert account".
+
+Consider replacing `String` with a dedicated error enum per module (e.g. `AccountsError`,
+`CryptoError`) that implement `Into<AppError>`, or promoting `AppError` variants to cover
+distinct failure modes. Do this alongside the `with_unlocked` refactor.
+
+---
+
+## Cross-cutting: Refactor `AppState::with_unlocked`
+
+The current pattern for unlocked commands requires three manual steps:
+
+```
+ensure_unlocked()     // check cipher is Some
+cipher_key()          // lock cipher, copy key out, unlock
+with_activity()       // lock db, do work, bump timestamp
+```
+
+This is repeated verbatim in every unlocked command. Refactor into a single
+`with_unlocked` method on `AppState` that does all three in one shot:
+
+```rust
+fn with_unlocked<T>(
+    &self,
+    f: impl FnOnce(&Connection, &[u8; 32]) -> Result<T, AppError>,
+) -> Result<T, AppError>
+```
+
+PR 4 or sooner — before PR 2 starts using the pattern.
+
+---
+
 ## Cross-cutting: TOTP timing strategy
 
 The 30-second TOTP window is managed entirely on the frontend:

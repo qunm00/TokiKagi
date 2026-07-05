@@ -1,9 +1,11 @@
+mod accounts;
 mod crypto;
 mod db;
 mod state;
 mod totp;
 mod vault;
 
+use accounts::Account;
 use secrecy::ExposeSecret;
 use state::{AppError, AppState};
 use std::sync::Mutex;
@@ -56,6 +58,32 @@ fn set_config(state: tauri::State<'_, AppState>, key: String, value: String) -> 
     state.with_activity(|conn| Ok(db::set_config(conn, &key, &value)?))
 }
 
+fn cipher_key(state: &AppState) -> Result<[u8; 32], AppError> {
+    let cipher = state.cipher()?;
+    let cipher_state = cipher.as_ref().ok_or(AppError::VaultLocked)?;
+    Ok(*cipher_state.key.expose_secret())
+}
+
+#[tauri::command]
+fn add_account(state: tauri::State<'_, AppState>, label: String, secret: String) -> Result<Account, AppError> {
+    vault::ensure_unlocked(&state)?;
+    let key = cipher_key(&state)?;
+    state.with_activity(|conn| Ok(accounts::add_account(conn, &key, &label, &secret)?))
+}
+
+#[tauri::command]
+fn get_accounts(state: tauri::State<'_, AppState>) -> Result<Vec<Account>, AppError> {
+    vault::ensure_unlocked(&state)?;
+    let key = cipher_key(&state)?;
+    state.with_activity(|conn| Ok(accounts::get_accounts(conn, &key)?))
+}
+
+#[tauri::command]
+fn delete_account(state: tauri::State<'_, AppState>, id: String) -> Result<(), AppError> {
+    vault::ensure_unlocked(&state)?;
+    state.with_activity(|conn| Ok(accounts::delete_account(conn, &id)?))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -81,7 +109,10 @@ pub fn run() {
             unlock,
             lock,
             get_config,
-            set_config
+            set_config,
+            add_account,
+            get_accounts,
+            delete_account
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

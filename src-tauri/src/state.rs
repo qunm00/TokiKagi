@@ -49,7 +49,6 @@ pub enum AppError {
     NotInitialized,
     AlreadyInitialized,
     InvalidPassword,
-    Keychain(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -61,8 +60,7 @@ impl std::fmt::Display for AppError {
             AppError::VaultLocked => write!(f, "vault is locked"),
             AppError::NotInitialized => write!(f, "not initialized"),
             AppError::AlreadyInitialized => write!(f, "already initialized"),
-            AppError::InvalidPassword => write!(f, "invalid password"),
-            AppError::Keychain(msg) => write!(f, "{msg}"),
+            AppError::InvalidPassword => write!(f, "invalid password")
         }
     }
 }
