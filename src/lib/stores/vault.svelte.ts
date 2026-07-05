@@ -57,34 +57,6 @@ function createVaultStore() {
     }
   }
 
-  async function unlockAndSaveToKeychain(password: string): Promise<void> {
-    loading = true;
-    error = null;
-    try {
-      await actions.unlockAndSaveToKeychain(password);
-      isLocked = false;
-    } catch (err) {
-      error = parseVaultError(err).message;
-      throw err;
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function unlockFromKeychain(): Promise<void> {
-    loading = true;
-    error = null;
-    try {
-      await actions.unlockFromKeychain();
-      isLocked = false;
-    } catch (err) {
-      error = parseVaultError(err).message;
-      throw err;
-    } finally {
-      loading = false;
-    }
-  }
-
   function clearError(): void {
     error = null;
   }
@@ -106,8 +78,6 @@ function createVaultStore() {
     createVault,
     unlockVault,
     lockVault,
-    unlockAndSaveToKeychain,
-    unlockFromKeychain,
     clearError,
   };
 }

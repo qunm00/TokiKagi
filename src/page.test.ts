@@ -5,13 +5,9 @@ import Page from "./routes/+page.svelte";
 
 vi.mock("$lib/actions/vault", () => ({
   isInitialized: vi.fn(),
-  hasKeychainEntry: vi.fn().mockResolvedValue(false),
   createVault: vi.fn().mockResolvedValue(undefined),
   unlock: vi.fn().mockResolvedValue(undefined),
   lock: vi.fn().mockResolvedValue(undefined),
-  unlockFromKeychain: vi.fn().mockResolvedValue(undefined),
-  saveToKeychain: vi.fn().mockResolvedValue(undefined),
-  removeFromKeychain: vi.fn().mockResolvedValue(undefined),
   getConfig: vi.fn().mockResolvedValue(null),
   setConfig: vi.fn().mockResolvedValue(undefined),
   generateTotp: vi.fn().mockResolvedValue(""),

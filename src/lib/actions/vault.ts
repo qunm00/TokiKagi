@@ -46,42 +46,6 @@ export async function setConfig(key: string, value: string): Promise<void> {
   }
 }
 
-export async function hasKeychainEntry(): Promise<boolean> {
-  return invoke<boolean>("has_keychain_entry");
-}
-
-export async function saveToKeychain(password: string): Promise<void> {
-  try {
-    await invoke("save_to_keychain", { password });
-  } catch (err) {
-    throw parseVaultError(err);
-  }
-}
-
-export async function unlockAndSaveToKeychain(password: string): Promise<void> {
-  try {
-    await invoke("unlock_and_save_to_keychain", { password });
-  } catch (err) {
-    throw parseVaultError(err);
-  }
-}
-
-export async function removeFromKeychain(): Promise<void> {
-  try {
-    await invoke("remove_from_keychain");
-  } catch (err) {
-    throw parseVaultError(err);
-  }
-}
-
-export async function unlockFromKeychain(): Promise<void> {
-  try {
-    await invoke("unlock_from_keychain");
-  } catch (err) {
-    throw parseVaultError(err);
-  }
-}
-
 export async function generateTotp(secret: string): Promise<string> {
   return invoke<string>("generate_totp", { secret });
 }

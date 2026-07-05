@@ -1,6 +1,5 @@
 mod crypto;
 mod db;
-mod keychain;
 mod state;
 mod totp;
 mod vault;
@@ -57,62 +56,6 @@ fn set_config(state: tauri::State<'_, AppState>, key: String, value: String) -> 
     state.with_activity(|conn| Ok(db::set_config(conn, &key, &value)?))
 }
 
-#[tauri::command]
-fn has_keychain_entry() -> bool {
-    keychain::has_keychain_entry()
-}
-
-#[tauri::command]
-fn save_to_keychain(password: String) -> Result<(), AppError> {
-    let password = secrecy::SecretString::from(password);
-    keychain::save_to_keychain(password.expose_secret())
-}
-
-#[tauri::command]
-fn unlock_and_save_to_keychain(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
-    password: String,
-) -> Result<(), AppError> {
-    let password = secrecy::SecretString::from(password);
-    vault::unlock_inner(&state, password.expose_secret())?;
-    keychain::save_to_keychain(password.expose_secret())?;
-
-    let auto_lock_minutes: u64 = {
-        let conn = state.db()?;
-        db::get_config(&conn, "auto_lock_minutes")?
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(vault::DEFAULT_AUTO_LOCK_MINUTES)
-    };
-
-    vault::spawn_auto_lock_watcher(app, Duration::from_secs(auto_lock_minutes * 60));
-    Ok(())
-}
-
-#[tauri::command]
-fn remove_from_keychain() -> Result<(), AppError> {
-    keychain::remove_from_keychain()
-}
-
-#[tauri::command]
-fn unlock_from_keychain(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), AppError> {
-    let password = keychain::get_password_from_keychain()?;
-    vault::unlock_inner(&state, password.expose_secret())?;
-
-    let auto_lock_minutes: u64 = {
-        let conn = state.db()?;
-        db::get_config(&conn, "auto_lock_minutes")?
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(vault::DEFAULT_AUTO_LOCK_MINUTES)
-    };
-
-    vault::spawn_auto_lock_watcher(app, Duration::from_secs(auto_lock_minutes * 60));
-    Ok(())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -138,12 +81,7 @@ pub fn run() {
             unlock,
             lock,
             get_config,
-            set_config,
-            has_keychain_entry,
-            save_to_keychain,
-            remove_from_keychain,
-            unlock_from_keychain,
-            unlock_and_save_to_keychain
+            set_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

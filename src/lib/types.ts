@@ -14,8 +14,7 @@ export type VaultErrorCode =
   | "VaultLocked"
   | "NotInitialized"
   | "AlreadyInitialized"
-  | "InvalidPassword"
-  | "Keychain";
+  | "InvalidPassword";
 
 export class VaultError extends Error {
   constructor(
@@ -35,7 +34,6 @@ export function parseVaultError(err: unknown): VaultError {
   if (message.includes("invalid password")) return new VaultError("InvalidPassword", message);
   if (message.includes("vault is locked")) return new VaultError("VaultLocked", message);
   if (message.includes("lock error")) return new VaultError("Lock", message);
-  if (message.includes("keychain")) return new VaultError("Keychain", message);
   if (message.includes("crypto")) return new VaultError("Crypto", message);
   return new VaultError("Db", message);
 }
