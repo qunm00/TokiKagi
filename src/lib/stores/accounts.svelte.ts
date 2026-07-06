@@ -1,6 +1,5 @@
-import type { Account } from "$lib/types";
 import * as actions from "$lib/actions/accounts";
-import { parseVaultError } from "$lib/types";
+import { type Account, parseVaultError } from "$lib/types";
 
 function createAccountsStore() {
   let accounts = $state<Account[]>([]);
