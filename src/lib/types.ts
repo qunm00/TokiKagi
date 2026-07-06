@@ -1,8 +1,10 @@
 export interface Account {
   id: string;
-  name: string;
-  issuer: string;
+  label: string;
   secret: string;
+  algorithm: string;
+  digits: number;
+  period: number;
   created_at: string;
   updated_at: string;
 }
