@@ -1,4 +1,5 @@
 <script lang="ts">
+import Alert from "$lib/components/Alert.svelte";
 import { Dialog } from "melt/builders";
 import { accountsStore } from "$lib/stores/accounts.svelte";
 
@@ -60,7 +61,7 @@ function handleCancel() {
     <h2 class="title">Add Account</h2>
 
     {#if error}
-      <div class="error" role="alert">{error}</div>
+      <Alert onDismiss={() => (error = null)}>{error}</Alert>
     {/if}
 
     <div class="field">
@@ -137,16 +138,6 @@ function handleCancel() {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-text);
-}
-
-.error {
-  background: rgba(220, 38, 38, 0.1);
-  color: var(--color-danger);
-  border: 1px solid var(--color-danger);
-  border-radius: var(--radius-base);
-  padding: var(--spacing-2) var(--spacing-3);
-  font-size: var(--font-size-sm);
-  text-align: center;
 }
 
 .field {
