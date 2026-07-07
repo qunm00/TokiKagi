@@ -8,21 +8,21 @@ static MIGRATION_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
     #[error("failed to open database: {0}")]
-    OpenFailed(String),
+    Open(String),
     #[error("database migration failed: {0}")]
-    MigrationFailed(String),
+    Migration(String),
     #[error("failed to read vault: {0}")]
-    VaultReadFailed(String),
+    VaultRead(String),
     #[error("invalid hex: {0}")]
-    DecodeFailed(String),
+    Decode(String),
     #[error("failed to insert vault: {0}")]
-    VaultWriteFailed(String),
+    VaultWrite(String),
     #[error("failed to read config: {0}")]
-    ConfigReadFailed(String),
+    ConfigRead(String),
     #[error("failed to write config: {0}")]
-    ConfigWriteFailed(String),
+    ConfigWrite(String),
     #[error("failed to check initialization: {0}")]
-    InitCheckFailed(String),
+    InitCheck(String),
 }
 
 /// Loads migrations from the embedded directory.
@@ -32,10 +32,10 @@ fn migrations() -> Migrations<'static> {
 
 /// Opens (or creates) the database at `path` and runs pending migrations.
 pub fn open(path: &str) -> Result<Connection, DbError> {
-    let mut conn = Connection::open(path).map_err(|e| DbError::OpenFailed(format!("{e}")))?;
+    let mut conn = Connection::open(path).map_err(|e| DbError::Open(format!("{e}")))?;
     migrations()
         .to_latest(&mut conn)
-        .map_err(|e| DbError::MigrationFailed(format!("{e}")))?;
+        .map_err(|e| DbError::Migration(format!("{e}")))?;
     Ok(conn)
 }
 
@@ -43,10 +43,10 @@ pub fn open(path: &str) -> Result<Connection, DbError> {
 #[cfg(test)]
 pub fn open_in_memory() -> Result<Connection, DbError> {
     let mut conn = Connection::open_in_memory()
-        .map_err(|e| DbError::OpenFailed(format!("{e}")))?;
+        .map_err(|e| DbError::Open(format!("{e}")))?;
     migrations()
         .to_latest(&mut conn)
-        .map_err(|e| DbError::MigrationFailed(format!("{e}")))?;
+        .map_err(|e| DbError::Migration(format!("{e}")))?;
     Ok(conn)
 }
 
@@ -56,9 +56,9 @@ pub fn get_vault(conn: &Connection) -> Result<(Vec<u8>, Vec<u8>, String), DbErro
         .query_row("SELECT salt, verifier, updated_at FROM vault WHERE id = 1", [], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })
-        .map_err(|e| DbError::VaultReadFailed(format!("{e}")))?;
-    let salt = hex::decode(&salt_hex).map_err(|e| DbError::DecodeFailed(format!("{e}")))?;
-    let verifier = hex::decode(&verifier_hex).map_err(|e| DbError::DecodeFailed(format!("{e}")))?;
+        .map_err(|e| DbError::VaultRead(format!("{e}")))?;
+    let salt = hex::decode(&salt_hex).map_err(|e| DbError::Decode(format!("{e}")))?;
+    let verifier = hex::decode(&verifier_hex).map_err(|e| DbError::Decode(format!("{e}")))?;
     Ok((salt, verifier, updated_at))
 }
 
@@ -68,7 +68,7 @@ pub fn set_vault(conn: &Connection, salt: &[u8], verifier: &[u8], updated_at: &s
         "INSERT OR REPLACE INTO vault (id, salt, verifier, updated_at) VALUES (1, ?1, ?2, ?3)",
         rusqlite::params![hex::encode(salt), hex::encode(verifier), updated_at],
     )
-    .map_err(|e| DbError::VaultWriteFailed(format!("{e}")))?;
+    .map_err(|e| DbError::VaultWrite(format!("{e}")))?;
     Ok(())
 }
 
@@ -82,7 +82,7 @@ pub fn get_config(conn: &Connection, key: &str) -> Result<Option<String>, DbErro
     match result {
         Ok(value) => Ok(Some(value)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(DbError::ConfigReadFailed(format!("{e}"))),
+        Err(e) => Err(DbError::ConfigRead(format!("{e}"))),
     }
 }
 
@@ -92,7 +92,7 @@ pub fn set_config(conn: &Connection, key: &str, value: &str) -> Result<(), DbErr
         "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
         rusqlite::params![key, value],
     )
-    .map_err(|e| DbError::ConfigWriteFailed(format!("{e}")))?;
+    .map_err(|e| DbError::ConfigWrite(format!("{e}")))?;
     Ok(())
 }
 
@@ -100,7 +100,7 @@ pub fn set_config(conn: &Connection, key: &str, value: &str) -> Result<(), DbErr
 pub fn is_initialized(conn: &Connection) -> Result<bool, DbError> {
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM vault", [], |row| row.get(0))
-        .map_err(|e| DbError::InitCheckFailed(format!("{e}")))?;
+        .map_err(|e| DbError::InitCheck(format!("{e}")))?;
     Ok(count > 0)
 }
 
