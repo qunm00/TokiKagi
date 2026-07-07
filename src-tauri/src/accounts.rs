@@ -30,6 +30,10 @@ pub enum AccountsError {
     SecretNotUtf8(String),
     #[error("invalid Base32 secret")]
     InvalidSecret,
+    #[error("label is too long (max 100 characters)")]
+    LabelTooLong,
+    #[error("invalid account id")]
+    InvalidId,
     #[error("failed to delete account: {0}")]
     DeleteFailed(String),
     #[error("{0}")]
@@ -46,6 +50,10 @@ pub fn add_account(
     let normalized = secret.to_uppercase().replace(' ', "");
     base32::decode(base32::Alphabet::Rfc4648 { padding: false }, &normalized)
         .ok_or(AccountsError::InvalidSecret)?;
+
+    if label.len() > 100 {
+        return Err(AccountsError::LabelTooLong);
+    }
 
     let id = uuid::Uuid::new_v4().to_string();
     let encrypted = crypto::encrypt(key, secret.as_bytes())?;
@@ -118,6 +126,7 @@ pub fn get_accounts(conn: &rusqlite::Connection, key: &[u8; 32]) -> Result<Vec<A
 }
 
 pub fn delete_account(conn: &rusqlite::Connection, id: &str) -> Result<(), AccountsError> {
+    uuid::Uuid::parse_str(id).map_err(|_| AccountsError::InvalidId)?;
     conn.execute("DELETE FROM accounts WHERE id = ?1", rusqlite::params![id])
         .map_err(|e| AccountsError::DeleteFailed(format!("{e}")))?;
     Ok(())
@@ -214,7 +223,7 @@ mod tests {
         let key = test_key();
 
         add_account(&conn, &key, "Keep me", "KEEP").unwrap();
-        delete_account(&conn, "nonexistent-uuid").unwrap();
+        delete_account(&conn, "00000000-0000-0000-0000-000000000000").unwrap();
 
         let accounts = get_accounts(&conn, &key).unwrap();
         assert_eq!(accounts.len(), 1);

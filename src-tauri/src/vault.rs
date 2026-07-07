@@ -10,6 +10,10 @@ pub const VAULT_VERIFIER_PLAINTEXT: &[u8] = b"TokiKagi Vault";
 pub const DEFAULT_AUTO_LOCK_MINUTES: u64 = 5;
 
 pub fn create_vault_inner(state: &AppState, password: &str) -> Result<(), AppError> {
+    if password.len() < 8 {
+        return Err(AppError::PasswordTooShort);
+    }
+
     let conn = state.db()?;
     if db::is_initialized(&conn)? {
         return Err(AppError::AlreadyInitialized);
@@ -165,8 +169,8 @@ mod tests {
     #[test]
     fn test_create_vault_rejects_when_already_initialized() {
         let state = make_state();
-        create_vault_inner(&state, "pw1").unwrap();
-        let result = create_vault_inner(&state, "pw2");
+        create_vault_inner(&state, "password1").unwrap();
+        let result = create_vault_inner(&state, "password2");
         assert!(matches!(result, Err(AppError::AlreadyInitialized)));
     }
 }

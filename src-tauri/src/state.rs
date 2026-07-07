@@ -53,6 +53,7 @@ pub enum AppError {
     NotInitialized,
     AlreadyInitialized,
     InvalidPassword,
+    PasswordTooShort,
 }
 
 impl std::fmt::Display for AppError {
@@ -64,7 +65,8 @@ impl std::fmt::Display for AppError {
             AppError::VaultLocked => write!(f, "vault is locked"),
             AppError::NotInitialized => write!(f, "not initialized"),
             AppError::AlreadyInitialized => write!(f, "already initialized"),
-            AppError::InvalidPassword => write!(f, "invalid password")
+            AppError::InvalidPassword => write!(f, "invalid password"),
+            AppError::PasswordTooShort => write!(f, "password must be at least 8 characters"),
         }
     }
 }

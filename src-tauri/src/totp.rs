@@ -36,15 +36,6 @@ pub fn generate_totp(secret: String) -> Result<String, String> {
     Ok(format!("{:06}", code))
 }
 
-#[tauri::command]
-pub fn get_time_remaining() -> u64 {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    TOTP_STEP - (now % TOTP_STEP)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,12 +70,5 @@ mod tests {
     fn test_invalid_base32() {
         let result = generate_totp("!!!invalid!!!".to_string());
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_time_remaining_bounds() {
-        let r = get_time_remaining();
-        assert!(r <= TOTP_STEP);
-        assert!(r > 0);
     }
 }
