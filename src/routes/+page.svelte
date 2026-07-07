@@ -24,9 +24,7 @@ let clearLabelTimeout: ReturnType<typeof setTimeout> | undefined;
 let lastAutoCopyId: string | undefined;
 let filtered = $derived(
   query
-    ? accountsStore.accounts.filter((a) =>
-        a.label.toLowerCase().includes(query.toLowerCase()),
-      )
+    ? accountsStore.accounts.filter((a) => a.label.toLowerCase().includes(query.toLowerCase()))
     : accountsStore.accounts,
 );
 
