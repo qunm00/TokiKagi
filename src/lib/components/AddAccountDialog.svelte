@@ -1,6 +1,6 @@
 <script lang="ts">
-import Alert from "$lib/components/Alert.svelte";
 import { Dialog } from "melt/builders";
+import Alert from "$lib/components/Alert.svelte";
 import { accountsStore } from "$lib/stores/accounts.svelte";
 
 let {
