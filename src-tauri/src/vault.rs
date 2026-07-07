@@ -62,13 +62,6 @@ pub fn unlock_inner(state: &AppState, password: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn ensure_unlocked(state: &AppState) -> Result<(), AppError> {
-    if state.cipher()?.is_none() {
-        return Err(AppError::VaultLocked);
-    }
-    Ok(())
-}
-
 pub fn spawn_auto_lock_watcher(handle: tauri::AppHandle, duration: Duration) {
     thread::spawn(move || {
         loop {
@@ -139,20 +132,6 @@ mod tests {
         assert!(state.cipher().unwrap().is_some());
         *state.cipher().unwrap() = None;
         assert!(state.cipher().unwrap().is_none());
-    }
-
-    #[test]
-    fn test_ensure_unlocked_returns_error_when_locked() {
-        let state = make_state();
-        let result = ensure_unlocked(&state);
-        assert!(matches!(result, Err(AppError::VaultLocked)));
-    }
-
-    #[test]
-    fn test_ensure_unlocked_ok_when_unlocked() {
-        let (state, _) = make_unlocked();
-        let result = ensure_unlocked(&state);
-        assert!(result.is_ok());
     }
 
     #[test]

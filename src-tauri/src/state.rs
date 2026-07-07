@@ -1,7 +1,7 @@
 use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
-use secrecy::SecretBox;
+use secrecy::{ExposeSecret, SecretBox};
 
 use crate::accounts;
 use crate::crypto;
@@ -33,15 +33,22 @@ impl AppState {
         self.last_activity.lock().map_err(|e| AppError::Lock(format!("lock error: {}", e)))
     }
 
-    pub fn with_activity<T>(
+    pub fn with_unlocked<T>(
         &self,
-        f: impl FnOnce(&rusqlite::Connection) -> Result<T, AppError>,
+        f: impl FnOnce(&rusqlite::Connection, &[u8; 32]) -> Result<T, AppError>,
     ) -> Result<T, AppError> {
+        let key = {
+            let cipher = self.cipher()?;
+            let cipher_state = cipher.as_ref().ok_or(AppError::VaultLocked)?;
+            *cipher_state.key.expose_secret()
+        };
+
         let conn = self.db()?;
-        let result = f(&conn)?;
+        let result = f(&conn, &key)?;
         *self.last_activity()? = Instant::now();
         Ok(result)
     }
+
 }
 
 #[derive(Debug, Clone, PartialEq)]

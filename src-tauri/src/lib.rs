@@ -48,40 +48,27 @@ fn lock(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 
 #[tauri::command]
 fn get_config(state: tauri::State<'_, AppState>, key: String) -> Result<Option<String>, AppError> {
-    vault::ensure_unlocked(&state)?;
-    state.with_activity(|conn| Ok(db::get_config(conn, &key)?))
+    state.with_unlocked(|conn, _| Ok(db::get_config(conn, &key)?))
 }
 
 #[tauri::command]
 fn set_config(state: tauri::State<'_, AppState>, key: String, value: String) -> Result<(), AppError> {
-    vault::ensure_unlocked(&state)?;
-    state.with_activity(|conn| Ok(db::set_config(conn, &key, &value)?))
-}
-
-fn cipher_key(state: &AppState) -> Result<[u8; 32], AppError> {
-    let cipher = state.cipher()?;
-    let cipher_state = cipher.as_ref().ok_or(AppError::VaultLocked)?;
-    Ok(*cipher_state.key.expose_secret())
+    state.with_unlocked(|conn, _| Ok(db::set_config(conn, &key, &value)?))
 }
 
 #[tauri::command]
 fn add_account(state: tauri::State<'_, AppState>, label: String, secret: String) -> Result<Account, AppError> {
-    vault::ensure_unlocked(&state)?;
-    let key = cipher_key(&state)?;
-    state.with_activity(|conn| Ok(accounts::add_account(conn, &key, &label, &secret)?))
+    state.with_unlocked(|conn, key| Ok(accounts::add_account(conn, key, &label, &secret)?))
 }
 
 #[tauri::command]
 fn get_accounts(state: tauri::State<'_, AppState>) -> Result<Vec<Account>, AppError> {
-    vault::ensure_unlocked(&state)?;
-    let key = cipher_key(&state)?;
-    state.with_activity(|conn| Ok(accounts::get_accounts(conn, &key)?))
+    state.with_unlocked(|conn, key| Ok(accounts::get_accounts(conn, key)?))
 }
 
 #[tauri::command]
 fn delete_account(state: tauri::State<'_, AppState>, id: String) -> Result<(), AppError> {
-    vault::ensure_unlocked(&state)?;
-    state.with_activity(|conn| Ok(accounts::delete_account(conn, &id)?))
+    state.with_unlocked(|conn, _| Ok(accounts::delete_account(conn, &id)?))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
