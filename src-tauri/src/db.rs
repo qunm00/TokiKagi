@@ -5,55 +5,75 @@ use rusqlite_migration::Migrations;
 /// Directory containing migration subdirectories (`01-init/up.sql`, …).
 static MIGRATION_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
+#[derive(Debug, thiserror::Error)]
+pub enum DbError {
+    #[error("failed to open database: {0}")]
+    OpenFailed(String),
+    #[error("database migration failed: {0}")]
+    MigrationFailed(String),
+    #[error("failed to read vault: {0}")]
+    VaultReadFailed(String),
+    #[error("invalid hex: {0}")]
+    DecodeFailed(String),
+    #[error("failed to insert vault: {0}")]
+    VaultWriteFailed(String),
+    #[error("failed to read config: {0}")]
+    ConfigReadFailed(String),
+    #[error("failed to write config: {0}")]
+    ConfigWriteFailed(String),
+    #[error("failed to check initialization: {0}")]
+    InitCheckFailed(String),
+}
+
 /// Loads migrations from the embedded directory.
 fn migrations() -> Migrations<'static> {
     Migrations::from_directory(&MIGRATION_DIR).expect("invalid migration directory")
 }
 
 /// Opens (or creates) the database at `path` and runs pending migrations.
-pub fn open(path: &str) -> Result<Connection, String> {
-    let mut conn = Connection::open(path).map_err(|e| format!("failed to open database: {e}"))?;
+pub fn open(path: &str) -> Result<Connection, DbError> {
+    let mut conn = Connection::open(path).map_err(|e| DbError::OpenFailed(format!("{e}")))?;
     migrations()
         .to_latest(&mut conn)
-        .map_err(|e| format!("database migration failed: {e}"))?;
+        .map_err(|e| DbError::MigrationFailed(format!("{e}")))?;
     Ok(conn)
 }
 
 /// Opens an in-memory database (for testing).
 #[cfg(test)]
-pub fn open_in_memory() -> Result<Connection, String> {
+pub fn open_in_memory() -> Result<Connection, DbError> {
     let mut conn = Connection::open_in_memory()
-        .map_err(|e| format!("failed to open in-memory database: {e}"))?;
+        .map_err(|e| DbError::OpenFailed(format!("{e}")))?;
     migrations()
         .to_latest(&mut conn)
-        .map_err(|e| format!("database migration failed: {e}"))?;
+        .map_err(|e| DbError::MigrationFailed(format!("{e}")))?;
     Ok(conn)
 }
 
 /// Returns the vault row: (salt, verifier, updated_at).
-pub fn get_vault(conn: &Connection) -> Result<(Vec<u8>, Vec<u8>, String), String> {
+pub fn get_vault(conn: &Connection) -> Result<(Vec<u8>, Vec<u8>, String), DbError> {
     let (salt_hex, verifier_hex, updated_at): (String, String, String) = conn
         .query_row("SELECT salt, verifier, updated_at FROM vault WHERE id = 1", [], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })
-        .map_err(|e| format!("failed to read vault: {e}"))?;
-    let salt = hex::decode(&salt_hex).map_err(|e| format!("invalid salt hex: {e}"))?;
-    let verifier = hex::decode(&verifier_hex).map_err(|e| format!("invalid verifier hex: {e}"))?;
+        .map_err(|e| DbError::VaultReadFailed(format!("{e}")))?;
+    let salt = hex::decode(&salt_hex).map_err(|e| DbError::DecodeFailed(format!("{e}")))?;
+    let verifier = hex::decode(&verifier_hex).map_err(|e| DbError::DecodeFailed(format!("{e}")))?;
     Ok((salt, verifier, updated_at))
 }
 
 /// Inserts (or replaces) the single vault row.
-pub fn set_vault(conn: &Connection, salt: &[u8], verifier: &[u8], updated_at: &str) -> Result<(), String> {
+pub fn set_vault(conn: &Connection, salt: &[u8], verifier: &[u8], updated_at: &str) -> Result<(), DbError> {
     conn.execute(
         "INSERT OR REPLACE INTO vault (id, salt, verifier, updated_at) VALUES (1, ?1, ?2, ?3)",
         rusqlite::params![hex::encode(salt), hex::encode(verifier), updated_at],
     )
-    .map_err(|e| format!("failed to insert vault: {e}"))?;
+    .map_err(|e| DbError::VaultWriteFailed(format!("{e}")))?;
     Ok(())
 }
 
 /// Reads a config value.
-pub fn get_config(conn: &Connection, key: &str) -> Result<Option<String>, String> {
+pub fn get_config(conn: &Connection, key: &str) -> Result<Option<String>, DbError> {
     let result: Result<String, rusqlite::Error> = conn.query_row(
         "SELECT value FROM config WHERE key = ?1",
         rusqlite::params![key],
@@ -62,25 +82,25 @@ pub fn get_config(conn: &Connection, key: &str) -> Result<Option<String>, String
     match result {
         Ok(value) => Ok(Some(value)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(format!("failed to read config: {e}")),
+        Err(e) => Err(DbError::ConfigReadFailed(format!("{e}"))),
     }
 }
 
 /// Writes a config value.
-pub fn set_config(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
+pub fn set_config(conn: &Connection, key: &str, value: &str) -> Result<(), DbError> {
     conn.execute(
         "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
         rusqlite::params![key, value],
     )
-    .map_err(|e| format!("failed to write config: {e}"))?;
+    .map_err(|e| DbError::ConfigWriteFailed(format!("{e}")))?;
     Ok(())
 }
 
 /// Returns `true` if vault have been created (has a row).
-pub fn is_initialized(conn: &Connection) -> Result<bool, String> {
+pub fn is_initialized(conn: &Connection) -> Result<bool, DbError> {
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM vault", [], |row| row.get(0))
-        .map_err(|e| format!("failed to check initialization: {e}"))?;
+        .map_err(|e| DbError::InitCheckFailed(format!("{e}")))?;
     Ok(count > 0)
 }
 

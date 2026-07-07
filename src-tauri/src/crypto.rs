@@ -4,6 +4,16 @@ use aes_gcm::{
 };
 use argon2::Argon2;
 
+#[derive(Debug, thiserror::Error)]
+pub enum CryptoError {
+    #[error("encryption failed: {0}")]
+    EncryptionFailed(String),
+    #[error("ciphertext too short")]
+    CiphertextTooShort,
+    #[error("decryption failed: authentication tag mismatch")]
+    DecryptionFailed,
+}
+
 /// Derives a 256-bit key from a password + salt using Argon2id.
 pub fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
     let mut key = [0u8; 32];
@@ -16,12 +26,12 @@ pub fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
 /// Encrypts plaintext using AES-256-GCM with a random nonce.
 ///
 /// Returns `[nonce (12 bytes) || ciphertext + tag]` as a single vec.
-pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, String> {
+pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
     let ciphertext = cipher
         .encrypt(&nonce, plaintext)
-        .map_err(|e| format!("encryption failed: {e}"))?;
+        .map_err(|e| CryptoError::EncryptionFailed(format!("{e}")))?;
 
     let mut out = nonce.to_vec();
     out.extend_from_slice(&ciphertext);
@@ -31,16 +41,16 @@ pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, String> {
 /// Decrypts data produced by [`encrypt`].
 ///
 /// Expects `data` to be `[nonce (12 bytes) || ciphertext + tag]`.
-pub fn decrypt(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, String> {
+pub fn decrypt(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, CryptoError> {
     if data.len() < 12 {
-        return Err("ciphertext too short".to_string());
+        return Err(CryptoError::CiphertextTooShort);
     }
     let (nonce_bytes, ciphertext) = data.split_at(12);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(nonce_bytes);
     cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|_| "decryption failed: authentication tag mismatch".to_string())
+        .map_err(|_| CryptoError::DecryptionFailed)
 }
 
 #[cfg(test)]

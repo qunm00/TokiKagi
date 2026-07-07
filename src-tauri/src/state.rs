@@ -3,6 +3,10 @@ use std::time::Instant;
 
 use secrecy::SecretBox;
 
+use crate::accounts;
+use crate::crypto;
+use crate::db;
+
 /// In-memory cipher key held while the vault is unlocked.
 /// Zeroed on drop (locks vault, drops CipherState, or app exit).
 pub struct CipherState {
@@ -71,14 +75,23 @@ impl serde::Serialize for AppError {
     }
 }
 
-impl From<String> for AppError {
-    fn from(msg: String) -> Self {
-        AppError::Db(msg)
+impl From<crypto::CryptoError> for AppError {
+    fn from(e: crypto::CryptoError) -> Self {
+        AppError::Crypto(e.to_string())
     }
 }
 
-impl AppError {
-    pub fn crypto(msg: impl Into<String>) -> Self {
-        AppError::Crypto(msg.into())
+impl From<db::DbError> for AppError {
+    fn from(e: db::DbError) -> Self {
+        AppError::Db(e.to_string())
+    }
+}
+
+impl From<accounts::AccountsError> for AppError {
+    fn from(e: accounts::AccountsError) -> Self {
+        match e {
+            accounts::AccountsError::Crypto(e) => AppError::Crypto(e.to_string()),
+            other => AppError::Db(other.to_string()),
+        }
     }
 }

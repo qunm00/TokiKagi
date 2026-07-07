@@ -17,7 +17,7 @@ pub fn create_vault_inner(state: &AppState, password: &str) -> Result<(), AppErr
 
     let salt: [u8; 16] = rand::random();
     let key = derive_key(password, &salt);
-    let verifier = encrypt(&key, VAULT_VERIFIER_PLAINTEXT).map_err(AppError::crypto)?;
+    let verifier = encrypt(&key, VAULT_VERIFIER_PLAINTEXT)?;
     let updated_at = chrono::Utc::now().to_rfc3339();
     db::set_vault(&conn, &salt, &verifier, &updated_at)?;
     drop(conn);
@@ -48,7 +48,7 @@ pub fn unlock_inner(state: &AppState, password: &str) -> Result<(), AppError> {
     };
 
     let key = derive_key(password, &salt);
-    let decrypted = decrypt(&key, &verifier).map_err(AppError::crypto)?;
+    let decrypted = decrypt(&key, &verifier).map_err(|_| AppError::InvalidPassword)?;
     if decrypted != VAULT_VERIFIER_PLAINTEXT {
         return Err(AppError::InvalidPassword);
     }

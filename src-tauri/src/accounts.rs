@@ -14,12 +14,32 @@ pub struct Account {
     pub updated_at: String,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum AccountsError {
+    #[error("failed to insert account: {0}")]
+    InsertFailed(String),
+    #[error("failed to prepare accounts query: {0}")]
+    QueryPrepareFailed(String),
+    #[error("failed to query accounts: {0}")]
+    QueryFailed(String),
+    #[error("failed to read account row: {0}")]
+    ReadFailed(String),
+    #[error("invalid secret hex: {0}")]
+    InvalidHex(String),
+    #[error("decrypted secret is not UTF-8: {0}")]
+    SecretNotUtf8(String),
+    #[error("failed to delete account: {0}")]
+    DeleteFailed(String),
+    #[error("{0}")]
+    Crypto(#[from] crypto::CryptoError),
+}
+
 pub fn add_account(
     conn: &rusqlite::Connection,
     key: &[u8; 32],
     label: &str,
     secret: &str,
-) -> Result<Account, String> {
+) -> Result<Account, AccountsError> {
     let id = uuid::Uuid::new_v4().to_string();
     let encrypted = crypto::encrypt(key, secret.as_bytes())?;
     let encrypted_hex = hex::encode(encrypted);
@@ -29,7 +49,7 @@ pub fn add_account(
         "INSERT INTO accounts (id, label, secret, algorithm, digits, period, created_at, updated_at) VALUES (?1, ?2, ?3, 'SHA1', 6, 30, ?4, ?5)",
         rusqlite::params![id, label, encrypted_hex, now, now],
     )
-    .map_err(|e| format!("failed to insert account: {e}"))?;
+    .map_err(|e| AccountsError::InsertFailed(format!("{e}")))?;
 
     Ok(Account {
         id,
@@ -43,13 +63,13 @@ pub fn add_account(
     })
 }
 
-pub fn get_accounts(conn: &rusqlite::Connection, key: &[u8; 32]) -> Result<Vec<Account>, String> {
+pub fn get_accounts(conn: &rusqlite::Connection, key: &[u8; 32]) -> Result<Vec<Account>, AccountsError> {
     let mut stmt = conn
         .prepare(
             "SELECT id, label, secret, algorithm, digits, period, created_at, updated_at \
              FROM accounts ORDER BY created_at ASC",
         )
-        .map_err(|e| format!("failed to prepare accounts query: {e}"))?;
+        .map_err(|e| AccountsError::QueryPrepareFailed(format!("{e}")))?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -64,17 +84,17 @@ pub fn get_accounts(conn: &rusqlite::Connection, key: &[u8; 32]) -> Result<Vec<A
                 row.get::<_, String>(7)?,
             ))
         })
-        .map_err(|e| format!("failed to query accounts: {e}"))?;
+        .map_err(|e| AccountsError::QueryFailed(format!("{e}")))?;
 
     let mut accounts = Vec::new();
     for row in rows {
         let (id, label, encrypted_hex, algorithm, digits, period, created_at, updated_at) =
-            row.map_err(|e| format!("failed to read account row: {e}"))?;
+            row.map_err(|e| AccountsError::ReadFailed(format!("{e}")))?;
         let encrypted =
-            hex::decode(&encrypted_hex).map_err(|e| format!("invalid secret hex: {e}"))?;
+            hex::decode(&encrypted_hex).map_err(|e| AccountsError::InvalidHex(format!("{e}")))?;
         let decrypted = crypto::decrypt(key, &encrypted)?;
         let secret =
-            String::from_utf8(decrypted).map_err(|e| format!("decrypted secret is not UTF-8: {e}"))?;
+            String::from_utf8(decrypted).map_err(|e| AccountsError::SecretNotUtf8(format!("{e}")))?;
         accounts.push(Account {
             id,
             label,
@@ -90,9 +110,9 @@ pub fn get_accounts(conn: &rusqlite::Connection, key: &[u8; 32]) -> Result<Vec<A
     Ok(accounts)
 }
 
-pub fn delete_account(conn: &rusqlite::Connection, id: &str) -> Result<(), String> {
+pub fn delete_account(conn: &rusqlite::Connection, id: &str) -> Result<(), AccountsError> {
     conn.execute("DELETE FROM accounts WHERE id = ?1", rusqlite::params![id])
-        .map_err(|e| format!("failed to delete account: {e}"))?;
+        .map_err(|e| AccountsError::DeleteFailed(format!("{e}")))?;
     Ok(())
 }
 
