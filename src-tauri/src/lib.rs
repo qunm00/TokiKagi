@@ -103,7 +103,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             totp::generate_totp,
-            totp::get_time_remaining,
             is_initialized,
             create_vault,
             unlock,

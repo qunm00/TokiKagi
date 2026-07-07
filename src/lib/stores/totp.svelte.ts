@@ -1,7 +1,7 @@
-import * as actions from "$lib/actions/vault";
+const TOTP_PERIOD = 30;
 
 function createTotpStore() {
-  let remaining = $state<number>(30);
+  let remaining = $state<number>(TOTP_PERIOD);
   let refreshCounter = $state<number>(0);
   let _interval: ReturnType<typeof setInterval> | null = null;
 
@@ -18,8 +18,8 @@ function createTotpStore() {
     }
   }
 
-  async function tick(): Promise<void> {
-    const secs = await actions.getTimeRemaining();
+  function tick(): void {
+    const secs = TOTP_PERIOD - (Math.floor(Date.now() / 1000) % TOTP_PERIOD);
     if (secs > remaining) {
       refreshCounter++;
     }
@@ -28,7 +28,7 @@ function createTotpStore() {
 
   function reset(): void {
     stop();
-    remaining = 30;
+    remaining = TOTP_PERIOD;
     refreshCounter = 0;
   }
 

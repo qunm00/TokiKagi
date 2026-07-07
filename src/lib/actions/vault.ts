@@ -49,7 +49,3 @@ export async function setConfig(key: string, value: string): Promise<void> {
 export async function generateTotp(secret: string): Promise<string> {
   return invoke<string>("generate_totp", { secret });
 }
-
-export async function getTimeRemaining(): Promise<number> {
-  return invoke<number>("get_time_remaining");
-}

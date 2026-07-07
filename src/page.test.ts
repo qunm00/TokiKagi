@@ -11,7 +11,6 @@ vi.mock("$lib/actions/vault", () => ({
   getConfig: vi.fn().mockResolvedValue(null),
   setConfig: vi.fn().mockResolvedValue(undefined),
   generateTotp: vi.fn().mockResolvedValue("482391"),
-  getTimeRemaining: vi.fn().mockResolvedValue(30),
 }));
 
 vi.mock("$lib/actions/accounts", () => ({
