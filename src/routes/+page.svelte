@@ -22,6 +22,8 @@ let autoCopyLabel = $state<string | null>(null);
 let delayedCopyTimeout: ReturnType<typeof setTimeout> | undefined;
 let clearLabelTimeout: ReturnType<typeof setTimeout> | undefined;
 let lastAutoCopyId: string | undefined;
+let editing = $state(false);
+let selectedIds = $state<Set<string>>(new Set());
 let filtered = $derived(
   query
     ? accountsStore.accounts.filter((a) => a.label.toLowerCase().includes(query.toLowerCase()))
@@ -104,8 +106,12 @@ async function refreshAllCodes() {
   totpCodes = codes;
 }
 
-async function handleDelete(id: string) {
-  await accountsStore.deleteAccount(id);
+async function handleDeleteSelected() {
+  for (const id of selectedIds) {
+    await accountsStore.deleteAccount(id);
+  }
+  selectedIds = new Set();
+  editing = false;
 }
 
 function handleAccountAdded() {
@@ -137,23 +143,68 @@ function handleCopyError(err: unknown) {
     <main class="main">
       <div class="toolbar">
         <SearchBar bind:query />
-        <button class="btn-add" onclick={() => (addDialogOpen = true)}>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-          Add Account
-        </button>
+        <div class="toolbar-actions">
+          {#if editing}
+            <span class="selected-count">{selectedIds.size} selected</span>
+            {#if selectedIds.size > 0}
+              <button class="btn-delete-selected" onclick={handleDeleteSelected}>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+                Delete
+              </button>
+            {/if}
+            <button class="btn-done" onclick={() => { editing = false; selectedIds = new Set(); }}>
+              Done
+            </button>
+          {:else}
+            <button class="btn-add" onclick={() => (addDialogOpen = true)}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              Add Account
+            </button>
+            <button class="btn-edit" onclick={() => (editing = true)}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              </svg>
+              Edit
+            </button>
+          {/if}
+        </div>
       </div>
 
       {#if filtered.length > 0}
@@ -163,9 +214,15 @@ function handleCopyError(err: unknown) {
               {account}
               totpCode={totpCodes[account.id] ?? ""}
               totpRemaining={totp.remaining}
-              onDelete={handleDelete}
+              {editing}
+              selected={selectedIds.has(account.id)}
               onCopyError={handleCopyError}
               copiedLabel={autoCopyLabel}
+              onToggleSelect={(id) => {
+                const next = new Set(selectedIds);
+                if (next.has(id)) { next.delete(id); } else { next.add(id); }
+                selectedIds = next;
+              }}
             />
           {/snippet}
         </AccountGrid>
@@ -238,5 +295,61 @@ function handleCopyError(err: unknown) {
 
 .btn-add:active {
   background: var(--color-primary-active);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.selected-count {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.btn-edit,
+.btn-done,
+.btn-delete-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.btn-edit {
+  background: transparent;
+  color: var(--color-text);
+}
+
+.btn-edit:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border-hover);
+}
+
+.btn-done {
+  background: var(--color-primary);
+  color: var(--color-primary-text);
+  border-color: var(--color-primary);
+}
+
+.btn-done:hover {
+  background: var(--color-primary-hover);
+}
+
+.btn-delete-selected {
+  background: transparent;
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.btn-delete-selected:hover {
+  background: rgba(220, 38, 38, 0.1);
 }
 </style>

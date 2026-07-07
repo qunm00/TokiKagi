@@ -5,33 +5,35 @@ let {
   account,
   totpCode,
   totpRemaining,
-  onDelete,
+  editing,
+  selected,
   onCopy,
   onCopyError,
   copiedLabel,
+  onToggleSelect,
 }: {
   account: Account;
   totpCode: string;
   totpRemaining: number;
-  onDelete?: (id: string) => void;
+  editing?: boolean;
+  selected?: boolean;
   onCopy?: (code: string) => void;
   onCopyError?: (err: unknown) => void;
   copiedLabel?: string | null;
+  onToggleSelect?: (id: string) => void;
 } = $props();
 
 let copied = $state(false);
-let showDelete = $state(false);
 
 let total = $derived(account.period || 30);
 let percent = $derived(total > 0 ? (totpRemaining / total) * 100 : 0);
-let circleColor = $derived(
+let barColor = $derived(
   percent > 50
     ? "var(--color-success)"
     : percent > 20
       ? "var(--color-warning)"
       : "var(--color-danger)",
 );
-const circumference = 100;
 
 function formatCode(code: string): string {
   const digits = account.digits || 6;
@@ -56,67 +58,33 @@ function handleKeydown(e: KeyboardEvent) {
     handleCopy();
   }
 }
-
-function handleDelete(e: MouseEvent) {
-  e.stopPropagation();
-  onDelete?.(account.id);
-}
 </script>
 
 <div
   class="card"
+  class:editing
   tabindex="0"
   role="button"
   aria-label="{account.label}, TOTP code"
   onclick={handleCopy}
   onkeydown={handleKeydown}
-  onmouseenter={() => (showDelete = true)}
-  onmouseleave={() => (showDelete = false)}
-  onfocus={() => (showDelete = true)}
-  onblur={() => (showDelete = false)}
 >
+  <div class="top-bar" style="width: {percent}%; background: {barColor};"></div>
   <div class="card-header">
     <span class="label">{account.label}</span>
     <div class="header-actions">
-      <svg viewBox="0 0 36 36" class="countdown-circle">
-        <circle
-          cx="18" cy="18" r="15.915"
-          fill="none"
-          stroke="var(--color-bg-tertiary)"
-          stroke-width="4"
-        />
-        <circle
-          cx="18" cy="18" r="15.915"
-          fill="none"
-          stroke={circleColor}
-          stroke-width="4"
-          stroke-dasharray={circumference}
-          stroke-dashoffset={circumference - (circumference * percent) / 100}
-          stroke-linecap="round"
-          transform="rotate(-90 18 18)"
-        />
-      </svg>
-      {#if showDelete && onDelete}
+      {#if editing}
         <button
-          class="delete-btn"
-          onclick={handleDelete}
-          aria-label="Delete {account.label}"
+          class="select-btn"
+          class:selected
+          onclick={(e) => { e.stopPropagation(); onToggleSelect?.(account.id); }}
+          aria-label="{selected ? 'Deselect' : 'Select'} {account.label}"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M3 6h18" />
-            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-          </svg>
+          {#if selected}
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          {:else}
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>
+          {/if}
         </button>
       {/if}
     </div>
@@ -137,6 +105,7 @@ function handleDelete(e: MouseEvent) {
   flex-direction: column;
   gap: var(--spacing-4);
   padding: var(--spacing-4);
+  padding-top: calc(var(--spacing-4) + 4px);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -144,6 +113,8 @@ function handleDelete(e: MouseEvent) {
   cursor: pointer;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   outline: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .card:hover {
@@ -154,6 +125,19 @@ function handleDelete(e: MouseEvent) {
 .card:focus-visible {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+
+.card.editing {
+  border-color: var(--color-primary);
+}
+
+.top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 4px;
+  transition: width 1s linear;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .card-header {
@@ -179,14 +163,14 @@ function handleDelete(e: MouseEvent) {
   flex-shrink: 0;
 }
 
-.delete-btn {
+.select-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -194,8 +178,12 @@ function handleDelete(e: MouseEvent) {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.delete-btn:hover {
+.select-btn:hover {
   background: rgba(220, 38, 38, 0.1);
+  color: var(--color-danger);
+}
+
+.select-btn.selected {
   color: var(--color-danger);
 }
 
@@ -232,15 +220,5 @@ function handleDelete(e: MouseEvent) {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.countdown-circle {
-  width: 24px;
-  height: 24px;
-  display: block;
-}
-
-.countdown-circle circle {
-  transition: stroke-dashoffset 1s linear, stroke 1s linear;
 }
 </style>
