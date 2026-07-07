@@ -35,7 +35,7 @@ let {
         Add Account
       </button>
     {/if}
-  {:else}
+  {:else if variant === "no-results"}
     <svg
       class="icon"
       xmlns="http://www.w3.org/2000/svg"

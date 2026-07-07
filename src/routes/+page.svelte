@@ -6,6 +6,7 @@ import AccountGrid from "$lib/components/AccountGrid.svelte";
 import AddAccountDialog from "$lib/components/AddAccountDialog.svelte";
 import EmptyState from "$lib/components/EmptyState.svelte";
 import Header from "$lib/components/Header.svelte";
+import SearchBar from "$lib/components/SearchBar.svelte";
 import SetPasswordScreen from "$lib/components/SetPasswordScreen.svelte";
 import UnlockScreen from "$lib/components/UnlockScreen.svelte";
 import { accountsStore } from "$lib/stores/accounts.svelte";
@@ -16,6 +17,14 @@ let checking = $state(true);
 let addDialogOpen = $state(false);
 let totpCodes = $state<Record<string, string>>({});
 let unlocked = $state(false);
+let query = $state("");
+let filtered = $derived(
+  query
+    ? accountsStore.accounts.filter((a) =>
+        a.label.toLowerCase().includes(query.toLowerCase()),
+      )
+    : accountsStore.accounts,
+);
 
 onMount(() => {
   vault.checkInitialized().finally(() => {
@@ -50,7 +59,7 @@ $effect(() => {
 
 async function refreshAllCodes() {
   const codes: Record<string, string> = {};
-  for (const account of accountsStore.accounts) {
+  for (const account of filtered) {
     try {
       codes[account.id] = await vaultActions.generateTotp(account.secret);
     } catch (err) {
@@ -89,31 +98,32 @@ function handleCopyError(err: unknown) {
   <UnlockScreen onUnlock={() => {}} />
 {:else}
   <div class="app-layout">
-    <Header accountCount={accountsStore.accounts.length} onLock={handleLock} />
+    <Header accountCount={filtered.length} onLock={handleLock} />
 
     <main class="main">
-      {#if accountsStore.accounts.length > 0}
-        <div class="toolbar">
-          <button class="btn-add" onclick={() => (addDialogOpen = true)}>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-            Add Account
-          </button>
-        </div>
+      <div class="toolbar">
+        <SearchBar bind:query />
+        <button class="btn-add" onclick={() => (addDialogOpen = true)}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+          Add Account
+        </button>
+      </div>
 
-        <AccountGrid accounts={accountsStore.accounts}>
+      {#if filtered.length > 0}
+        <AccountGrid accounts={filtered}>
           {#snippet children(account)}
             <AccountCard
               {account}
@@ -125,7 +135,7 @@ function handleCopyError(err: unknown) {
           {/snippet}
         </AccountGrid>
       {:else}
-        <EmptyState variant="empty" onAddAccount={() => (addDialogOpen = true)} />
+        <EmptyState variant={query ? "no-results" : "empty"} onAddAccount={() => (addDialogOpen = true)} />
       {/if}
     </main>
 
@@ -166,7 +176,8 @@ function handleCopyError(err: unknown) {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-4);
   border-bottom: 1px solid var(--color-border);
 }
