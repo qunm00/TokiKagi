@@ -10,8 +10,14 @@ vi.mock("$lib/actions/vault", () => ({
   lock: vi.fn().mockResolvedValue(undefined),
   getConfig: vi.fn().mockResolvedValue(null),
   setConfig: vi.fn().mockResolvedValue(undefined),
-  generateTotp: vi.fn().mockResolvedValue(""),
+  generateTotp: vi.fn().mockResolvedValue("482391"),
   getTimeRemaining: vi.fn().mockResolvedValue(30),
+}));
+
+vi.mock("$lib/actions/accounts", () => ({
+  getAccounts: vi.fn().mockResolvedValue([]),
+  addAccount: vi.fn(),
+  deleteAccount: vi.fn(),
 }));
 
 describe("+page.svelte", () => {

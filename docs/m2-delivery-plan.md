@@ -202,3 +202,24 @@ The 30-second TOTP window is managed entirely on the frontend:
 | On `refreshCounter` change | `$effect` in `+page.svelte` | Call `generate_totp(secret)` for each account |
 
 Only `generate_totp` and `get_time_remaining` require IPC to Rust. The 1s tick is pure JS. This minimizes IPC calls (1 per account per 30s instead of 1 per account per second).
+
+---
+
+## Cross-cutting: Input validation
+
+User-input validation is uneven across the app — frontend has partial checks, backend has almost none:
+
+| Gap | Where | Concern |
+|---|---|---|
+| Secret format not validated at add time | `add_account` Rust command | Bad Base32 secret is silently encrypted; error surfaces only later in `refreshAllCodes()` as an empty code |
+| No server-side password length check | `create_vault` Rust command | 8-char minimum is frontend-only; direct Tauri IPC call bypasses it |
+| No label length limit | `add_account` label | Stored in plaintext, no max — could cause UI layout issues |
+| No character restrictions on label | `add_account` label | Rendered via Svelte's auto-escaping `{account.label}` so XSS is not a concern, but no sanitization exists |
+| No UUID validation on delete | `delete_account` id | ID comes from the store, so unlikely to be malformed, but no server-side guard |
+
+### Recommendations (in priority order)
+
+1. **Validate Base32 in `add_account`** — check secret validity on the Rust side before encrypting, return a clear error to the user
+2. **Add server-side password min-length** — mirror the 8-char frontend check in `create_vault_inner` (defense in depth)
+3. **Cap label length** — truncate or reject labels over ~100 chars in `add_account`
+4. **Validate UUID format** on `delete_account` — cheap sanity check

@@ -1,6 +1,5 @@
 <script lang="ts">
 import type { Account } from "$lib/types";
-import CountdownBar from "./CountdownBar.svelte";
 
 let {
   account,
@@ -21,6 +20,17 @@ let {
 let copied = $state(false);
 let showDelete = $state(false);
 
+let total = $derived(account.period || 30);
+let percent = $derived(total > 0 ? (totpRemaining / total) * 100 : 0);
+let circleColor = $derived(
+  percent > 50
+    ? "var(--color-success)"
+    : percent > 20
+      ? "var(--color-warning)"
+      : "var(--color-danger)",
+);
+const circumference = 100;
+
 function formatCode(code: string): string {
   const digits = account.digits || 6;
   const clean = code.replace(/\s/g, "").slice(0, digits);
@@ -32,7 +42,7 @@ async function handleCopy() {
     await navigator.clipboard.writeText(totpCode);
     copied = true;
     onCopy?.(totpCode);
-    setTimeout(() => (copied = false), 1500);
+    setTimeout(() => (copied = false), 3000);
   } catch (err) {
     onCopyError?.(err);
   }
@@ -65,29 +75,49 @@ function handleDelete(e: MouseEvent) {
 >
   <div class="card-header">
     <span class="label">{account.label}</span>
-    {#if showDelete && onDelete}
-      <button
-        class="delete-btn"
-        onclick={handleDelete}
-        aria-label="Delete {account.label}"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
+    <div class="header-actions">
+      <svg viewBox="0 0 36 36" class="countdown-circle">
+        <circle
+          cx="18" cy="18" r="15.915"
           fill="none"
-          stroke="currentColor"
-          stroke-width="2"
+          stroke="var(--color-bg-tertiary)"
+          stroke-width="4"
+        />
+        <circle
+          cx="18" cy="18" r="15.915"
+          fill="none"
+          stroke={circleColor}
+          stroke-width="4"
+          stroke-dasharray={circumference}
+          stroke-dashoffset={circumference - (circumference * percent) / 100}
           stroke-linecap="round"
-          stroke-linejoin="round"
+          transform="rotate(-90 18 18)"
+        />
+      </svg>
+      {#if showDelete && onDelete}
+        <button
+          class="delete-btn"
+          onclick={handleDelete}
+          aria-label="Delete {account.label}"
         >
-          <path d="M3 6h18" />
-          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-        </svg>
-      </button>
-    {/if}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 6h18" />
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          </svg>
+        </button>
+      {/if}
+    </div>
   </div>
 
   <div class="code-wrapper">
@@ -97,10 +127,6 @@ function handleDelete(e: MouseEvent) {
     {/if}
   </div>
 
-  <div class="footer">
-    <CountdownBar remaining={totpRemaining} total={account.period || 30} />
-    <span class="remaining">{totpRemaining}s</span>
-  </div>
 </div>
 
 <style>
@@ -142,6 +168,13 @@ function handleDelete(e: MouseEvent) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex-shrink: 0;
 }
 
 .delete-btn {
@@ -199,18 +232,13 @@ function handleDelete(e: MouseEvent) {
   }
 }
 
-.footer {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
+.countdown-circle {
+  width: 24px;
+  height: 24px;
+  display: block;
 }
 
-.remaining {
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-  min-width: 2em;
-  text-align: right;
+.countdown-circle circle {
+  transition: stroke-dashoffset 1s linear, stroke 1s linear;
 }
 </style>
