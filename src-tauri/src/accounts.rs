@@ -28,6 +28,8 @@ pub enum AccountsError {
     InvalidHex(String),
     #[error("decrypted secret is not UTF-8: {0}")]
     SecretNotUtf8(String),
+    #[error("invalid Base32 secret")]
+    InvalidSecret,
     #[error("failed to delete account: {0}")]
     DeleteFailed(String),
     #[error("{0}")]
@@ -40,6 +42,11 @@ pub fn add_account(
     label: &str,
     secret: &str,
 ) -> Result<Account, AccountsError> {
+    // Validate Base32 at add time so invalid secrets are caught early
+    let normalized = secret.to_uppercase().replace(' ', "");
+    base32::decode(base32::Alphabet::Rfc4648 { padding: false }, &normalized)
+        .ok_or(AccountsError::InvalidSecret)?;
+
     let id = uuid::Uuid::new_v4().to_string();
     let encrypted = crypto::encrypt(key, secret.as_bytes())?;
     let encrypted_hex = hex::encode(encrypted);
