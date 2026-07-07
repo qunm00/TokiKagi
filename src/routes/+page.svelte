@@ -18,6 +18,10 @@ let addDialogOpen = $state(false);
 let totpCodes = $state<Record<string, string>>({});
 let unlocked = $state(false);
 let query = $state("");
+let autoCopyLabel = $state<string | null>(null);
+let delayedCopyTimeout: ReturnType<typeof setTimeout> | undefined;
+let clearLabelTimeout: ReturnType<typeof setTimeout> | undefined;
+let lastAutoCopyId: string | undefined;
 let filtered = $derived(
   query
     ? accountsStore.accounts.filter((a) =>
@@ -55,6 +59,38 @@ $effect(() => {
   if (count > 0) {
     refreshAllCodes();
   }
+});
+
+$effect(() => {
+  void filtered;
+  void totpCodes;
+
+  // ── Reset: not exactly one match or code not ready ──
+  if (filtered.length !== 1 || !totpCodes[filtered[0].id]) {
+    clearTimeout(delayedCopyTimeout);
+    clearTimeout(clearLabelTimeout);
+    autoCopyLabel = null;
+    lastAutoCopyId = undefined;
+    return;
+  }
+
+  // ── Guard: same single account as last time (e.g. TOTP refresh) ──
+  const account = filtered[0];
+  if (account.id === lastAutoCopyId) return;
+  lastAutoCopyId = account.id;
+
+  // ── Schedule: copy after 1.5s pause ──
+  clearTimeout(delayedCopyTimeout);
+  clearTimeout(clearLabelTimeout);
+  delayedCopyTimeout = setTimeout(() => {
+    const code = totpCodes[account.id];
+    if (!code) return;
+    navigator.clipboard.writeText(code).catch(() => {});
+    autoCopyLabel = account.label;
+    clearLabelTimeout = setTimeout(() => {
+      autoCopyLabel = null;
+    }, 3000);
+  }, 500);
 });
 
 async function refreshAllCodes() {
@@ -131,6 +167,7 @@ function handleCopyError(err: unknown) {
               totpRemaining={totp.remaining}
               onDelete={handleDelete}
               onCopyError={handleCopyError}
+              copiedLabel={autoCopyLabel}
             />
           {/snippet}
         </AccountGrid>

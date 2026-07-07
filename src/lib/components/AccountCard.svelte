@@ -8,6 +8,7 @@ let {
   onDelete,
   onCopy,
   onCopyError,
+  copiedLabel,
 }: {
   account: Account;
   totpCode: string;
@@ -15,6 +16,7 @@ let {
   onDelete?: (id: string) => void;
   onCopy?: (code: string) => void;
   onCopyError?: (err: unknown) => void;
+  copiedLabel?: string | null;
 } = $props();
 
 let copied = $state(false);
@@ -122,8 +124,8 @@ function handleDelete(e: MouseEvent) {
 
   <div class="code-wrapper">
     <span class="code">{formatCode(totpCode)}</span>
-    {#if copied}
-      <span class="copied-badge">Copied!</span>
+    {#if copied || copiedLabel === account.label}
+      <span class="copied-badge">Copied {account.label}!</span>
     {/if}
   </div>
 
