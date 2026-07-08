@@ -4,7 +4,7 @@ use crate::state::{AppError, AppState, CipherState};
 use secrecy::SecretBox;
 use std::time::{Duration, Instant};
 use std::thread;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub const VAULT_VERIFIER_PLAINTEXT: &[u8] = b"TokiKagi Vault";
 pub const DEFAULT_AUTO_LOCK_MINUTES: u64 = 5;
@@ -72,6 +72,7 @@ pub fn spawn_auto_lock_watcher(handle: tauri::AppHandle, duration: Duration) {
             }
             let elapsed = state.last_activity.lock().unwrap_or_else(|e| e.into_inner()).elapsed();
             if elapsed >= duration {
+                handle.emit("vault-locked", ()).ok();
                 *state.cipher.lock().unwrap_or_else(|e| e.into_inner()) = None;
                 break;
             }

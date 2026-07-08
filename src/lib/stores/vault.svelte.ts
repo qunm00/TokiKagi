@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import * as actions from "$lib/actions/vault";
 import { parseVaultError } from "$lib/types";
 
@@ -60,6 +61,10 @@ function createVaultStore() {
   function clearError(): void {
     error = null;
   }
+
+  listen("vault-locked", () => {
+    isLocked = true;
+  });
 
   return {
     get isInitialized() {
