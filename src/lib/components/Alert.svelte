@@ -8,7 +8,7 @@ let {
 }: {
   variant?: "error" | "warning";
   onDismiss?: () => void;
-  children?: Snippet;
+  children: Snippet;
 } = $props();
 </script>
 
