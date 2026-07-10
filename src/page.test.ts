@@ -13,6 +13,10 @@ vi.mock("$lib/actions/vault", () => ({
   generateTotp: vi.fn().mockResolvedValue("482391"),
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(vi.fn()),
+}));
+
 vi.mock("$lib/actions/accounts", () => ({
   getAccounts: vi.fn().mockResolvedValue([]),
   addAccount: vi.fn(),
