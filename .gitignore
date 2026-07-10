@@ -14,3 +14,8 @@ vite.config.ts.timestamp-*
 /coverage/
 src-tauri/lcov.info
 .pnpm-store/
+
+# Tauri auto-generated mobile icons (desktop-only app)
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/64x64.png
