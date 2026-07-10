@@ -2,7 +2,7 @@
 name = "tokikagi"
 version = "0.1.0"
 description = "A TOTP desktop authenticator built with Tauri and SvelteKit."
-authors = ["you"]
+authors = ["Quan"]
 edition = "2021"
 license = "GPL-3.0-only"
 

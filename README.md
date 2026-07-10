@@ -14,6 +14,20 @@ Store and manage your 2FA secrets locally, generate time-based one-time password
 
 ## Getting started
 
+### Download
+
+Download the latest release from [GitHub Releases](https://github.com/qunm00/TokiKagi/releases).
+
+| Platform | File |
+|----------|------|
+| macOS (Intel) | `tokikagi_x64.dmg` |
+| macOS (Apple Silicon) | `tokikagi_aarch64.dmg` |
+| Linux | Build from source (see below) |
+
+> **macOS note:** The app is not signed with an Apple Developer certificate. On first launch, right-click the app → Open, or go to System Settings → Privacy & Security → "Open anyway." This is a one-time step.
+
+### Development
+
 ```bash
 # Install dependencies
 pnpm install
@@ -23,6 +37,15 @@ pnpm run tauri dev
 ```
 
 The app opens in a native window. Frontend dev server runs on http://localhost:1420.
+
+### Build from source
+
+```bash
+pnpm install
+pnpm tauri build
+```
+
+Requires Rust and system dependencies for your platform. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ## Stack
 
