@@ -1,4 +1,5 @@
 <script lang="ts">
+import { fly } from "svelte/transition";
 import Alert from "$lib/components/Alert.svelte";
 import { vault } from "$lib/stores/vault.svelte";
 
@@ -24,7 +25,7 @@ async function handleSubmit(e: Event) {
 }
 </script>
 
-<form class="screen" onsubmit={handleSubmit}>
+<form class="screen" in:fly|global={{ y: 16, duration: 250 }} onsubmit={handleSubmit}>
   <div class="card">
     <h1 class="title">Unlock Vault</h1>
 

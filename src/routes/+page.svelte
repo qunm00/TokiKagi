@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import { fly } from "svelte/transition";
 import * as vaultActions from "$lib/actions/vault";
 import AccountCard from "$lib/components/AccountCard.svelte";
 import AccountGrid from "$lib/components/AccountGrid.svelte";
@@ -137,7 +138,7 @@ function handleCopyError(err: unknown) {
 {:else if vault.isLocked}
   <UnlockScreen onUnlock={() => {}} />
 {:else}
-  <div class="app-layout">
+  <div class="app-layout" in:fly|global={{ y: 16, duration: 250 }}>
     <Header accountCount={filtered.length} onLock={handleLock} />
 
     <main class="main">

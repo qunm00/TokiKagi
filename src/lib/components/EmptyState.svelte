@@ -55,6 +55,11 @@ let {
     <p class="description">
       No accounts match your search. Try a different term.
     </p>
+    {#if onAddAccount}
+      <button class="btn-primary" onclick={onAddAccount}>
+        Add Account
+      </button>
+    {/if}
   {/if}
 </div>
 
