@@ -10,21 +10,31 @@ Store and manage your 2FA secrets locally, generate time-based one-time password
 - Live 6-digit code display with 30-second countdown
 - Click to copy code to clipboard
 - Local storage (no cloud, no server)
-- Cross-platform (macOS, Windows, Linux)
+- macOS (Apple Silicon)
 
 ## Getting started
 
-### Download
+### Install
 
-Download the latest release from [GitHub Releases](https://github.com/qunm00/TokiKagi/releases).
+Install on macOS with one command:
 
-| Platform | File |
-|----------|------|
-| macOS (Intel) | `tokikagi_x64.dmg` |
-| macOS (Apple Silicon) | `tokikagi_aarch64.dmg` |
-| Linux | Build from source (see below) |
+```sh
+curl -fsSL https://raw.githubusercontent.com/qunm00/TokiKagi/main/scripts/install.sh | sh
+```
 
-> **macOS note:** The app is not signed with an Apple Developer certificate. On first launch, right-click the app → Open, or go to System Settings → Privacy & Security → "Open anyway." This is a one-time step.
+To install a given version, pass the tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/qunm00/TokiKagi/main/scripts/install.sh | sh -s -- v0.1.1
+```
+
+The script downloads the app with curl, checks the SHA-256, and adds a local signature, so Apple Silicon runs it. The app goes to `~/Applications` by default. To use another folder, set `INSTALL_DIR`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/qunm00/TokiKagi/main/scripts/install.sh | INSTALL_DIR="/Applications" sh
+```
+
+The app is not signed by Apple and it is not notarized. The local signature in the script is enough for macOS to run it.
 
 ### Development
 
@@ -46,6 +56,33 @@ pnpm tauri build
 ```
 
 Requires Rust and system dependencies for your platform. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+
+## Updates
+
+TokiKagi checks for updates on launch. It reads `latest.json` from the newest GitHub release, verifies a signature over the download, installs the app in place, and restarts.
+
+That signature comes from the key of the person who publishes the release. It does not need an Apple certificate. Generate the key pair one time:
+
+```sh
+cargo tauri signer generate -w ~/.tauri/tokikagi.key
+```
+
+## Release
+
+A tag push builds the app and attaches these files to the release:
+
+- `tokikagi.app.zip` and `tokikagi.app.zip.sha256`, for a manual install.
+- `tokikagi.app.tar.gz` and `tokikagi.app.tar.gz.sig`, for the updater.
+- `latest.json`, the manifest that the app reads to find an update.
+
+The workflow needs two secrets on the `release` environment: `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Add a required reviewer to that environment to hold every release until it is approved.
+
+Push a tag to start the workflow:
+
+```sh
+git tag -a v0.1.1 -m "v0.1.1"
+git push origin v0.1.1
+```
 
 ## Stack
 

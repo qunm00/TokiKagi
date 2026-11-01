@@ -1,6 +1,6 @@
 {
   "name": "tokikagi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A TOTP desktop authenticator built with Tauri and SvelteKit.",
   "type": "module",
   "scripts": {

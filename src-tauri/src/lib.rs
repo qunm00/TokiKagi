@@ -4,6 +4,7 @@ mod db;
 mod state;
 mod totp;
 mod vault;
+mod update;
 
 use accounts::Account;
 use secrecy::ExposeSecret;
@@ -75,6 +76,7 @@ fn delete_account(state: tauri::State<'_, AppState>, id: String) -> Result<(), A
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let db_dir = app.path().app_data_dir().expect("failed to resolve app data dir");
             std::fs::create_dir_all(&db_dir).expect("failed to create app data dir");
@@ -86,6 +88,18 @@ pub fn run() {
                 cipher: Mutex::new(None),
                 last_activity: Mutex::new(Instant::now()),
             });
+
+            #[cfg(not(debug_assertions))]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    match update::check_and_install(&handle).await {
+                        Ok(true) => handle.restart(),
+                        Ok(false) => {}
+                        Err(e) => eprintln!("update: {e}"),
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
