@@ -37,9 +37,7 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg4ODk0QzI1MDIyQUE3RDAKUldUUXB5b0NKVXlKaU1NQndJNExjd3F5OERDY24zOWhzVEt6V1BBVFRKbWJtdXIva0c5Q0RPb1YK",
-      "endpoints": [
-        "https://github.com/qunm00/TokiKagi/releases/latest/download/latest.json"
-      ]
+      "endpoints": ["https://github.com/qunm00/TokiKagi/releases/latest/download/latest.json"]
     }
   }
 }
